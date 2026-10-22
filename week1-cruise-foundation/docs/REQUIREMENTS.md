@@ -1,6 +1,6 @@
 # Đối chiếu với đề tài và kế hoạch
 
-Phạm vi của bảng dưới là yêu cầu/thiết kế theo tài liệu và bản gốc `cruise-sql`. Các dòng “Chạy thật” mô tả bản gốc, không khẳng định mọi chức năng đã được port vào repo này. Mốc hiện tại của `HQTCSDL/week1-cruise-foundation` gồm đăng nhập, phân quyền, Tổng quan chỉ đọc và tạo/sửa chuyến cùng lịch trình cảng; tiến độ triển khai trong repo này được ghi ở README.
+Phạm vi của bảng dưới là yêu cầu/thiết kế theo tài liệu và bản gốc `cruise-sql`. Các dòng “Chạy thật” mô tả bản gốc, không khẳng định mọi chức năng đã được port vào repo này. Mốc hiện tại của `HQTCSDL/week1-cruise-foundation` gồm đăng nhập, phân quyền, Tổng quan theo chuyến/booking với thống kê hoạt động, đăng ký, giao dịch và thông báo, cùng tạo/sửa chuyến và lịch trình cảng; tiến độ triển khai trong repo này được ghi ở README.
 
 Nguồn đối chiếu: De-Tai.docx và 1.docx do người dùng cung cấp. Phạm vi ứng dụng hành khách/POS là web responsive theo trao đổi trong chat và kế hoạch. Bảng này phân biệt phần chạy thật với tích hợp thiết bị/thu tiền được mô phỏng.
 

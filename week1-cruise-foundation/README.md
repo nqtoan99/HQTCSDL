@@ -1,6 +1,6 @@
 # Aurora Cruise · mốc nền tảng và tổng quan
 
-Mốc hiện tại: đăng nhập/đăng xuất, mật khẩu băm scrypt, phiên 8 giờ, 8 vai trò, Tổng quan đọc dữ liệu theo quyền và quản lý chuyến/lịch cảng cho ITINERARY/ADMIN. Người dùng được phép tạo/sửa chuyến, thêm/sửa điểm dừng; giờ cảng, cảng cũ/mới, lý do, người cập nhật và thông báo được lưu cùng nghiệp vụ. Chưa có API ghi đăng ký/check-in/POS/tài chính. Không phụ thuộc thư mục `cruise-sql` khi chạy.
+Mốc hiện tại: đăng nhập/đăng xuất, mật khẩu băm scrypt, phiên 8 giờ, 8 vai trò, Tổng quan theo booking/chuyến và quản lý chuyến/lịch cảng cho ITINERARY/ADMIN. Tổng quan hiển thị hành trình, điểm dừng, trải nghiệm và sức chứa, lượt xác nhận/chờ, chi tiết giao dịch theo quyền, thông báo; có thể chọn booking hoặc chuyến để đổi ngữ cảnh. Người dùng được phép tạo/sửa chuyến, thêm/sửa điểm dừng; giờ cảng, cảng cũ/mới, lý do, người cập nhật và thông báo được lưu cùng nghiệp vụ. Chưa có API ghi đăng ký/check-in/POS/tài chính. Không phụ thuộc thư mục `cruise-sql` khi chạy.
 
 ## Chạy
 
@@ -30,7 +30,7 @@ Mật khẩu demo: Aurora123! Mỗi tài khoản được lưu hash với salt r
 
 ## Mốc đã triển khai và phần tiếp theo
 
-Đã có các lát cắt đầu cuối có thể review và push: đăng nhập/phân quyền, chọn ngữ cảnh chuyến hoặc booking, Tổng quan, tạo/sửa chuyến, quản lý điểm dừng, đổi giờ cảng có kiểm tra xung đột tour, lưu lý do/lịch sử và tự tạo thông báo. Tiếp theo là nghiệp vụ ghi đăng ký/hủy, check-in, ghi nhận POS và đối soát tài chính.
+Đã hoàn tất lát cắt Tổng quan theo yêu cầu: chọn booking/chuyến, thông tin hành trình, trạng thái và điểm dừng, hoạt động kèm sức chứa/đăng ký, chi phí và các giao dịch gần đây theo quyền, thông báo gần đây và lịch trải nghiệm tiếp theo. Cũng đã có đăng nhập/phân quyền, tạo/sửa chuyến, quản lý điểm dừng, đổi giờ cảng có kiểm tra xung đột tour, lưu lý do/lịch sử và tự tạo thông báo. Phần tiếp theo là nghiệp vụ ghi đăng ký/hủy, check-in, ghi nhận POS và đối soát tài chính.
 
 ## SQL và kiểm tra
 
