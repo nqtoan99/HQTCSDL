@@ -441,6 +441,34 @@ p {
 .overview-grid .timeline {
   margin-bottom: 0;
 }
+.itinerary-hero {
+  align-items: center;
+}
+.itinerary-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  z-index: 1;
+}
+.itinerary-actions .secondary {
+  background: #fff;
+  color: var(--ink);
+}
+.itinerary-list {
+  margin: 20px 0;
+}
+.itinerary-history .history-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.date-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 15px;
+}
 .table-wrap {
   overflow: auto;
 }
@@ -677,6 +705,9 @@ a:focus-visible {
   .overview-grid {
     grid-template-columns: 1fr;
   }
+  .date-pair {
+    grid-template-columns: 1fr;
+  }
   .overview-activities {
     grid-column: auto;
   }
@@ -838,6 +869,9 @@ code {
   }
   .page-title {
     flex-wrap: wrap;
+  }
+  .itinerary-hero .itinerary-actions {
+    margin-top: 18px;
   }
 }
 @media print {

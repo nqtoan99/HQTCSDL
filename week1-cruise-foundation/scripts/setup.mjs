@@ -26,6 +26,7 @@ if(exists.trim()!=='1'){
  console.log('Giữ nguyên schema và dữ liệu đã có.');
 }
 await run('04-auth.sql');
+await run('05-itinerary.sql');
 const pending=await jsonQuery("SELECT UserId FROM Users WHERE PasswordHash IS NULL AND Email LIKE '%@demo.local' FOR JSON PATH");
 if(pending.length)await query(pending.map(u=>`UPDATE Users SET PasswordHash=${literal(hashPassword('Aurora123!'))} WHERE UserId=${u.UserId} AND PasswordHash IS NULL;`).join('\n'));
 console.log(`Database ${database} sẵn sàng. Mật khẩu demo: Aurora123!`);
