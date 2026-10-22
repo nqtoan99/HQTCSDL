@@ -1,6 +1,6 @@
-# Aurora Cruise tuần 1
+# Aurora Cruise · mốc nền tảng và tổng quan
 
-Mốc hiện tại: đăng nhập/đăng xuất, mật khẩu băm scrypt, phiên 8 giờ, 8 vai trò và API đọc dữ liệu theo chủ sở hữu. Chưa có API ghi đăng ký/check-in/POS/tài chính. Không phụ thuộc thư mục cruise-sql.
+Mốc hiện tại: đăng nhập/đăng xuất, mật khẩu băm scrypt, phiên 8 giờ, 8 vai trò và màn Tổng quan đọc dữ liệu theo quyền. Tổng quan cho phép hành khách chọn booking hoặc nhân viên chọn chuyến để xem lịch cảng, thống kê hoạt động/đăng ký, chi phí trong phạm vi được cấp và thông báo. Chưa có API ghi đăng ký/check-in/POS/tài chính hay chỉnh sửa lịch trình. Không phụ thuộc thư mục `cruise-sql` khi chạy.
 
 ## Chạy
 
@@ -27,6 +27,10 @@ Mật khẩu demo: Aurora123! Mỗi tài khoản được lưu hash với salt r
 | Tài chính | finance@demo.local |
 | Vận hành | operations@demo.local |
 | Quản trị | admin@demo.local |
+
+## Mốc đã triển khai và phần tiếp theo
+
+Đã có một lát cắt đầu cuối có thể review và push: đăng nhập/phân quyền, chọn ngữ cảnh chuyến hoặc booking, API đọc tổng quan và giao diện responsive. Tiếp theo là nghiệp vụ ghi đăng ký/hủy, check-in, ghi nhận POS, đối soát tài chính, chỉnh lịch và gửi thông báo.
 
 ## SQL và kiểm tra
 

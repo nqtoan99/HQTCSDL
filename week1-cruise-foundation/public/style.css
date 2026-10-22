@@ -146,6 +146,19 @@ header {
   gap: 15px;
   align-items: center;
 }
+.context-label {
+  min-width: 210px;
+  color: var(--muted);
+  font-size: 10px;
+}
+.context-label select {
+  margin-top: 4px;
+  padding: 8px 10px;
+  font-size: 12px;
+}
+.context-label select:disabled {
+  opacity: .8;
+}
 label {
   display: block;
   font-size: 11px;
@@ -410,6 +423,24 @@ p {
   grid-template-columns: 1.5fr 1fr;
   gap: 20px;
 }
+.overview-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  align-items: start;
+}
+.overview-activities {
+  grid-column: 1 / -1;
+}
+.overview-hero h2 {
+  margin-top: 10px;
+}
+.booking-summary p {
+  margin: 8px 0;
+}
+.overview-grid .timeline {
+  margin-bottom: 0;
+}
 .table-wrap {
   overflow: auto;
 }
@@ -642,8 +673,12 @@ a:focus-visible {
     font-size: 23px;
   }
   .cards,
-  .grid-two {
+  .grid-two,
+  .overview-grid {
     grid-template-columns: 1fr;
+  }
+  .overview-activities {
+    grid-column: auto;
   }
   .section-head {
     align-items: flex-start;
@@ -831,8 +866,21 @@ code {
   }
   .controls {
     width: 100%;
+    flex-wrap: wrap;
     justify-content: space-between;
     align-items: flex-end;
+  }
+  .controls #context-control {
+    flex: 1 0 100%;
+    min-width: 0;
+  }
+  .context-label {
+    min-width: 0;
+    max-width: none;
+    width: 100%;
+  }
+  .context-label select {
+    min-width: 0;
   }
   .controls #role-label {
     flex: 1;
