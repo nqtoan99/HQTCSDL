@@ -31,6 +31,33 @@ function bookingQuery(u,bid){
  const guest=u.roles.includes('PASSENGER')&&!u.roles.includes('ADMIN');
  return `SELECT b.BookingId,b.CruiseId,b.CabinId,b.PackageId,p.UserId,u.Name,c.Name AS Cruise,cb.Number AS Cabin,pk.Name AS Package FROM Bookings b JOIN Passengers p ON p.PassengerId=b.PassengerId JOIN Users u ON u.UserId=p.UserId JOIN Cruises c ON c.CruiseId=b.CruiseId JOIN Cabins cb ON cb.CabinId=b.CabinId JOIN Packages pk ON pk.PackageId=b.PackageId WHERE ${guest?`p.UserId=${u.UserId}`:'1=1'}${bid===undefined?'':` AND b.BookingId=${id(bid)}`}`;
 }
+function passengerFinanceQuery(u){
+ const owner=`JOIN dbo.Bookings b ON b.BookingId=ac.BookingId JOIN dbo.Passengers p ON p.PassengerId=b.PassengerId AND p.UserId=${u.UserId}`;
+ return `SELECT
+  JSON_QUERY((SELECT ac.AccountId,ac.BookingId,c.Name AS Cruise,cb.Number AS Cabin,pk.Name AS Package,ac.Status,
+   CONVERT(decimal(18,2),COALESCE(SUM(CASE t.Status WHEN 'POSTED' THEN t.Amount WHEN 'REFUNDED' THEN t.Amount-COALESCE(t.RefundAmount,0) ELSE 0 END),0)) AS CurrentCharges,
+   CONVERT(decimal(18,2),CASE WHEN ac.Status='OPEN' THEN COALESCE(SUM(CASE t.Status WHEN 'POSTED' THEN t.Amount WHEN 'REFUNDED' THEN t.Amount-COALESCE(t.RefundAmount,0) ELSE 0 END),0) ELSE 0 END) AS UnpaidAmount,
+   CONVERT(decimal(18,2),COALESCE(SUM(CASE WHEN t.Status='REFUNDED' THEN COALESCE(t.RefundAmount,0) ELSE 0 END),0)) AS RefundedAmount,
+   inv.InvoiceId,inv.Total AS InvoiceTotal,inv.CreatedAt AS InvoicedAt,pay.PaymentId,pay.Amount AS PaidAmount,pay.Method AS PaymentMethod,pay.CreatedAt AS PaidAt
+   FROM dbo.Accounts ac ${owner}
+   JOIN dbo.Cruises c ON c.CruiseId=b.CruiseId JOIN dbo.Cabins cb ON cb.CabinId=b.CabinId JOIN dbo.Packages pk ON pk.PackageId=b.PackageId
+   LEFT JOIN dbo.Transactions t ON t.AccountId=ac.AccountId
+   LEFT JOIN dbo.Invoices inv ON inv.AccountId=ac.AccountId LEFT JOIN dbo.Payments pay ON pay.InvoiceId=inv.InvoiceId
+   GROUP BY ac.AccountId,ac.BookingId,c.Name,cb.Number,pk.Name,ac.Status,inv.InvoiceId,inv.Total,inv.CreatedAt,pay.PaymentId,pay.Amount,pay.Method,pay.CreatedAt
+   ORDER BY ac.AccountId FOR JSON PATH)) AS accounts,
+  JSON_QUERY((SELECT t.TransactionId,t.AccountId,t.RegistrationId,t.ServiceId,t.DeviceId,t.Quantity,t.Amount,t.Status,t.RefundAmount,t.RefundedAt,t.CreatedAt,
+   COALESCE(s.Name,a.Name,N'Dịch vụ') AS Description,CONVERT(decimal(18,2),CASE t.Status WHEN 'POSTED' THEN t.Amount WHEN 'REFUNDED' THEN t.Amount-COALESCE(t.RefundAmount,0) ELSE 0 END) AS NetAmount,
+   JSON_QUERY((SELECT d.DisputeId,d.Reason,d.Status,d.SubmittedAt,d.ResolvedAt,d.Resolution FROM dbo.Disputes d WHERE d.TransactionId=t.TransactionId AND d.SubmittedBy=${u.UserId} ORDER BY d.SubmittedAt DESC FOR JSON PATH)) AS disputes
+   FROM dbo.Transactions t JOIN dbo.Accounts ac ON ac.AccountId=t.AccountId ${owner}
+   LEFT JOIN dbo.Services s ON s.ServiceId=t.ServiceId LEFT JOIN dbo.Registrations r ON r.RegistrationId=t.RegistrationId LEFT JOIN dbo.Activities a ON a.ActivityId=r.ActivityId
+   ORDER BY t.CreatedAt DESC,t.TransactionId DESC FOR JSON PATH)) AS transactions,
+  JSON_QUERY((SELECT inv.InvoiceId,inv.AccountId,ac.BookingId,c.Name AS Cruise,cb.Number AS Cabin,inv.Total,inv.CreatedAt,
+   pay.PaymentId,pay.Amount AS PaidAmount,pay.Method,pay.CreatedAt AS PaidAt
+   FROM dbo.Invoices inv JOIN dbo.Accounts ac ON ac.AccountId=inv.AccountId ${owner}
+   JOIN dbo.Cruises c ON c.CruiseId=b.CruiseId JOIN dbo.Cabins cb ON cb.CabinId=b.CabinId
+   LEFT JOIN dbo.Payments pay ON pay.InvoiceId=inv.InvoiceId ORDER BY inv.CreatedAt DESC FOR JSON PATH)) AS invoices
+  FOR JSON PATH,WITHOUT_ARRAY_WRAPPER`;
+}
 async function state(u){
  const guest=u.roles.includes('PASSENGER')&&!u.roles.includes('ADMIN');
  const bs=guest?`SELECT b.BookingId FROM Bookings b JOIN Passengers p ON p.PassengerId=b.PassengerId WHERE p.UserId=${u.UserId}`:'SELECT BookingId FROM Bookings';
@@ -112,6 +139,14 @@ const server=http.createServer(async(req,res)=>{
     if(!receipt)throw Error('SQL Server chưa trả về biên nhận đã lưu.');
     return send(200,{ok:true,transaction,receipt});
    }
+   if(req.method==='POST'&&url.pathname==='/api/passenger/disputes'){
+    requireRoles(u,'PASSENGER');const b=await requestJson(req),transactionId=id(b.transactionId),reason=text(b.reason,500).trim();
+    if(reason.length<10)fail(400,'Lý do tranh chấp phải có từ 10 đến 500 ký tự.');
+    await runProcedure(`EXEC dbo.usp_SubmitPassengerDispute @TransactionId=${transactionId},@PassengerUserId=${u.UserId},@Reason=${literal(reason)};`);
+    const dispute=(await jsonQuery(`SELECT TOP(1) d.DisputeId,d.TransactionId,d.Reason,d.Status,d.SubmittedAt,d.ResolvedAt,d.Resolution FROM dbo.Disputes d JOIN dbo.Transactions t ON t.TransactionId=d.TransactionId JOIN dbo.Accounts ac ON ac.AccountId=t.AccountId JOIN dbo.Bookings b ON b.BookingId=ac.BookingId JOIN dbo.Passengers p ON p.PassengerId=b.PassengerId WHERE d.TransactionId=${transactionId} AND d.SubmittedBy=${u.UserId} ORDER BY d.SubmittedAt DESC FOR JSON PATH`))[0];
+    if(!dispute)throw Error('SQL Server chưa trả về tranh chấp đã ghi nhận.');
+    return send(201,dispute);
+   }
    if(req.method==='GET'&&url.pathname==='/api/pos/receipts'){
     requireRoles(u,'POS');return send(200,await jsonQuery(`SELECT TOP(50) r.ReceiptId,r.ClientId,r.DeviceId,d.Name AS DeviceName,r.StaffId,r.SyncedAt,t.TransactionId,t.ServiceId,s.Name AS ServiceName,t.Quantity,t.Amount,t.Status FROM dbo.POSReceipts r JOIN dbo.Devices d ON d.DeviceId=r.DeviceId JOIN dbo.Transactions t ON t.ClientId=r.ClientId JOIN dbo.Services s ON s.ServiceId=t.ServiceId WHERE r.StaffId=${u.UserId} ORDER BY r.SyncedAt DESC FOR JSON PATH`));
    }
@@ -169,6 +204,11 @@ const server=http.createServer(async(req,res)=>{
    }
    if(req.method!=='GET')fail(405,'Phương thức không được hỗ trợ cho API này.');
    if(url.pathname==='/api/me')return send(200,u);
+   if(url.pathname==='/api/passenger/finance'){
+    requireRoles(u,'PASSENGER');const finance=await jsonQuery(passengerFinanceQuery(u));
+    for(const key of ['accounts','transactions','invoices'])if(!Array.isArray(finance?.[key]))finance[key]=[];
+    return send(200,finance);
+   }
    if(url.pathname==='/api/state')return send(200,await state(u));
    if(url.pathname==='/api/admin/data'){
     requireRoles(u,'ADMIN');return send(200,await jsonQuery(`SELECT
