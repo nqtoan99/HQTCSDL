@@ -39,6 +39,8 @@
 | Action | varchar(10) |  | Không |  |
 | ActorId | int |  | Có |  |
 | CreatedAt | datetime2 |  | Không | (sysutcdatetime()) |
+| Details | nvarchar(1000) |  | Có |  |
+| CorrelationId | uniqueidentifier |  | Có |  |
 
 ## BLELocations
 

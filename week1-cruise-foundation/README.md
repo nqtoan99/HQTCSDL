@@ -1,6 +1,6 @@
 # Aurora Cruise · mốc nền tảng và tổng quan
 
-Mốc hiện tại: đăng nhập/đăng xuất, mật khẩu băm scrypt, phiên 8 giờ, 8 vai trò, Tổng quan theo booking/chuyến, quản lý chuyến/lịch cảng, đăng ký, hủy và quản trị hệ thống. Màn hình quản trị cho phép tạo/sửa/khóa tài khoản, đổi mật khẩu và nhiều vai trò; quản lý danh mục; gán booking; cấu hình dịch vụ trong gói; sửa chính sách hủy/hoàn; kích hoạt hoặc vô hiệu mã định danh. SQL kiểm tra lại quyền và quy tắc dữ liệu cho mọi thao tác. Chưa có kiểm tra trùng lịch, check-in, POS và cập nhật tài chính. Không phụ thuộc thư mục `cruise-sql` khi chạy.
+Mốc hiện tại: đăng nhập/đăng xuất, mật khẩu băm scrypt, phiên 8 giờ, 8 vai trò, Tổng quan theo booking/chuyến, quản lý chuyến/lịch cảng, đăng ký, hủy, quản trị hệ thống và toàn vẹn dữ liệu. SQL kiểm tra quyền, quan hệ chéo bảng, bảo vệ tài khoản đã chốt, đối chiếu hóa đơn/thanh toán và ghi audit có actor, chi tiết, mã liên kết. Chưa có kiểm tra trùng lịch, check-in, POS và màn đối soát tài chính. Không phụ thuộc thư mục `cruise-sql` khi chạy.
 
 ## Chạy
 
@@ -32,13 +32,13 @@ Trong dữ liệu mẫu, gói Premium bao gồm hoạt động Đêm nhạc trê
 
 ## Mốc đã triển khai và phần tiếp theo
 
-Đã hoàn tất lát cắt Tổng quan theo yêu cầu: chọn booking/chuyến, thông tin hành trình, trạng thái và điểm dừng, hoạt động kèm sức chứa/đăng ký, chi phí và các giao dịch gần đây theo quyền, thông báo gần đây và lịch trải nghiệm tiếp theo. Cũng đã có đăng nhập/phân quyền, tạo/sửa chuyến, quản lý điểm dừng, đổi giờ cảng có kiểm tra xung đột tour, lưu lý do/lịch sử và tự tạo thông báo. Nghiệp vụ đăng ký đã kiểm tra quyền, đúng chuyến, trạng thái hoạt động, sức chứa, giá theo gói, danh sách chờ và tự chuyển khách khi có chỗ. Nghiệp vụ hủy kiểm tra quyền, hạn hủy, check-in, trạng thái tài khoản, hoàn phí theo chính sách và giữ dấu vết giao dịch. Quản trị hệ thống đã có giao diện và API đầy đủ cho người dùng, vai trò, danh mục, booking, gói dịch vụ, chính sách và mã định danh. Phần tiếp theo là toàn vẹn dữ liệu, check-in, ghi nhận POS và đối soát tài chính.
+Đã hoàn tất lát cắt Tổng quan, đăng nhập/phân quyền, lịch trình, đăng ký/danh sách chờ, hủy/hoàn phí và quản trị hệ thống. Toàn vẹn dữ liệu chặn cabin hoặc hoạt động sai chuyến, giao dịch sai account, chứng từ sai tổng; chốt account tạo Invoice, Payment và trạng thái SETTLED trong cùng transaction, đồng thời chặn sửa tài chính sau chốt. Các index phục vụ tra cứu audit, booking và giao dịch đã được bổ sung. Phần tiếp theo của nhóm là check-in, ghi nhận POS và màn đối soát tài chính.
 
 ## SQL và kiểm tra
 
-Setup chạy 01-schema → 03-seed → 04-auth → 05-itinerary → 06-registration → 07-cancellation → 08-admin trên DB mới. Với DB CruiseWeek1 hiện có, setup giữ dữ liệu rồi chạy các migration để cập nhật lịch trình, đăng ký, hủy/hoàn phí và quản trị. Seed không gọi usp_Register. Nếu dùng SSMS bật SQLCMD Mode. Sau khi chạy SQL bằng tay, chạy setup để cấp hash demo và cập nhật migration.
+Setup chạy 01-schema → 03-seed → 04-auth → 05-itinerary → 06-registration → 07-cancellation → 08-admin → 09-integrity trên DB mới. Với DB CruiseWeek1 hiện có, setup giữ dữ liệu rồi chạy các migration để cập nhật lịch trình, đăng ký, hủy/hoàn phí, quản trị và toàn vẹn. Seed không gọi usp_Register. Nếu dùng SSMS bật SQLCMD Mode. Sau khi chạy SQL bằng tay, chạy setup để cấp hash demo và cập nhật migration.
 
-Chạy npm run check và npm run test:auth. Test dùng SQL Server thật, cổng tạm và một fixture tài khoản được dọn sau kiểm tra. Chi tiết API/quyền: docs/AUTH.md. Kết quả: docs/AUTH-TEST-RESULTS.md. ERD/DICTIONARY/DESIGN/REQUIREMENTS cũ mô tả thiết kế đích, chưa phải toàn bộ chức năng đã triển khai.
+Chạy `npm run check`, `npm run test:auth` và `npm run test:integrity`. Test toàn vẹn tự tạo database CruiseWeek1IntegrityTest riêng và xóa sau khi chạy. Chi tiết API/quyền: docs/AUTH.md. Kết quả: docs/AUTH-TEST-RESULTS.md.
 
 ## Code cần push
 

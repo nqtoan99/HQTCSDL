@@ -2,9 +2,11 @@
 
 ## Kiến trúc
 
-React responsive → HTTP API Node.js → sqlcmd Windows Authentication → SQL Server. Frontend lấy danh mục và trạng thái từ API, gửi ID/đầu vào nghiệp vụ. API không nhận giá giao dịch hoặc UserId nhân viên do client tự chọn; lấy actor từ phiên đã đăng nhập. Các giá trị chuỗi truyền sang SQL bằng hex UTF-16, tên procedure/parameter do code cố định. SQLCMD được gọi bằng spawn, không qua shell. JSON trả về cũng đi qua hex để không bị mất dấu tiếng Việt trên Windows console ẩn.
+React responsive → HTTP API Node.js → sqlcmd Windows Authentication → SQL Server. Frontend lấy danh mục và trạng thái từ API, gửi ID/đầu vào nghiệp vụ. API không nhận giá giao dịch hoặc UserId nhân viên do client tự chọn; lấy actor từ phiên đã đăng nhập. Chuỗi được escape thành literal Unicode, tên procedure/parameter do code cố định. SQLCMD được gọi bằng spawn, không qua shell; JSON được chuyển qua hex UTF-16 để giữ đúng tiếng Việt trên Windows console ẩn.
 
 Các thao tác cập nhật nhiều bảng dùng SET XACT_ABORT ON, BEGIN TRY/BEGIN CATCH, BEGIN TRAN/COMMIT và ROLLBACK khi lỗi. Khóa UPDLOCK/HOLDLOCK trên hoạt động và tài khoản tuần tự hóa đăng ký, ghi chi phí, hủy và chốt hóa đơn. UNIQUE ngăn đăng ký lặp, check-in lặp, hóa đơn lặp và UUID giao dịch lặp. Filtered unique index chỉ cho một khoản phí đăng ký POSTED, cho phép giữ lịch sử phí REFUNDED khi đăng ký lại.
+
+Trigger kiểm tra cabin với tàu, khu vực hoặc điểm dừng với chuyến, và giao dịch với account. Hóa đơn phải bằng số dư tính từ POSTED/REFUNDED/VOID; thanh toán phải bằng hóa đơn. `usp_SettleAccount` khóa account, kiểm tra tranh chấp, tạo hóa đơn và thanh toán rồi chuyển SETTLED trong một transaction. Audit của cùng nghiệp vụ dùng chung CorrelationId để truy vết.
 
 ## Mô hình dữ liệu
 
