@@ -1112,3 +1112,29 @@ code {
 .cruise-screen {
   min-width: 0;
 }
+.pos-grid {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.8fr) minmax(0, 1.2fr);
+  gap: 18px;
+  align-items: start;
+}
+.pos-status {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin: 18px 0;
+  padding: 14px 16px;
+  border: 1px solid var(--line, #d8dfd9);
+  border-radius: 12px;
+  background: #fff;
+}
+.pos-status.online strong { color: var(--green, #174c42); }
+.pos-status.offline { border-color: #e0bf86; background: #fff8e9; }
+.pos-status.offline strong { color: #9b5d12; }
+.pos-status span { color: var(--muted, #66756f); }
+.pos-grid .panel { min-width: 0; }
+.pos-grid code { font-size: 11px; }
+@media (max-width: 900px) {
+  .pos-grid { grid-template-columns: 1fr; }
+  .pos-status { align-items: flex-start; flex-direction: column; gap: 4px; }
+}

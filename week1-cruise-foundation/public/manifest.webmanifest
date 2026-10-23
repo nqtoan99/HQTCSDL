@@ -1,0 +1,12 @@
+{
+  "id": "/",
+  "name": "Aurora Cruise POS",
+  "short_name": "Aurora POS",
+  "description": "Giao diện POS và hàng đợi giao dịch ngoại tuyến Aurora Cruise",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "lang": "vi",
+  "background_color": "#f5f6f1",
+  "theme_color": "#174c42"
+}

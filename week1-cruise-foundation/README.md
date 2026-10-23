@@ -1,6 +1,6 @@
 # Aurora Cruise · mốc nền tảng và tổng quan
 
-Mốc hiện tại: đăng nhập/đăng xuất, mật khẩu băm scrypt, phiên 8 giờ, 8 vai trò, Tổng quan theo booking/chuyến, quản lý chuyến/lịch cảng, đăng ký, hủy, quản trị hệ thống và toàn vẹn dữ liệu. SQL kiểm tra quyền, quan hệ chéo bảng, bảo vệ tài khoản đã chốt, đối chiếu hóa đơn/thanh toán và ghi audit có actor, chi tiết, mã liên kết. Chưa có kiểm tra trùng lịch, check-in, POS và màn đối soát tài chính. Không phụ thuộc thư mục `cruise-sql` khi chạy.
+Mốc hiện tại: đăng nhập/đăng xuất, mật khẩu băm scrypt, phiên 8 giờ, 8 vai trò, Tổng quan theo booking/chuyến, quản lý chuyến/lịch cảng, đăng ký, hủy, quản trị hệ thống và toàn vẹn dữ liệu. SQL kiểm tra quyền, quan hệ chéo bảng, bảo vệ tài khoản đã chốt, đối chiếu hóa đơn/thanh toán và ghi audit có actor, chi tiết, mã liên kết. POS ngoại tuyến đang ở mốc 50%: có màn hình POS, cache app shell, lưu hàng đợi trong localStorage theo tài khoản và UUID cho từng giao dịch. Chưa có đồng bộ POS lên SQL, chống phát lại ở database hoặc biên nhận đồng bộ. Không phụ thuộc thư mục `cruise-sql` khi chạy.
 
 ## Chạy
 
@@ -32,13 +32,13 @@ Trong dữ liệu mẫu, gói Premium bao gồm hoạt động Đêm nhạc trê
 
 ## Mốc đã triển khai và phần tiếp theo
 
-Đã hoàn tất lát cắt Tổng quan, đăng nhập/phân quyền, lịch trình, đăng ký/danh sách chờ, hủy/hoàn phí và quản trị hệ thống. Toàn vẹn dữ liệu chặn cabin hoặc hoạt động sai chuyến, giao dịch sai account, chứng từ sai tổng; chốt account tạo Invoice, Payment và trạng thái SETTLED trong cùng transaction, đồng thời chặn sửa tài chính sau chốt. Các index phục vụ tra cứu audit, booking và giao dịch đã được bổ sung. Phần tiếp theo của nhóm là check-in, ghi nhận POS và màn đối soát tài chính.
+Đã hoàn tất lát cắt Tổng quan, đăng nhập/phân quyền, lịch trình, đăng ký/danh sách chờ, hủy/hoàn phí và quản trị hệ thống. Toàn vẹn dữ liệu chặn cabin hoặc hoạt động sai chuyến, giao dịch sai account, chứng từ sai tổng; chốt account tạo Invoice, Payment và trạng thái SETTLED trong cùng transaction, đồng thời chặn sửa tài chính sau chốt. Các index phục vụ tra cứu audit, booking và giao dịch đã được bổ sung. POS 50% hiện chỉ ghi giao dịch chờ ở trình duyệt; chưa gọi API hoặc tạo giao dịch SQL. Phần POS 70% sẽ bổ sung API/T-SQL đồng bộ và chống UUID trùng; mốc 100% sẽ thêm biên nhận, xử lý lỗi/retry và kiểm thử nghiệm thu.
 
 ## SQL và kiểm tra
 
 Setup chạy 01-schema → 03-seed → 04-auth → 05-itinerary → 06-registration → 07-cancellation → 08-admin → 09-integrity trên DB mới. Với DB CruiseWeek1 hiện có, setup giữ dữ liệu rồi chạy các migration để cập nhật lịch trình, đăng ký, hủy/hoàn phí, quản trị và toàn vẹn. Seed không gọi usp_Register. Nếu dùng SSMS bật SQLCMD Mode. Sau khi chạy SQL bằng tay, chạy setup để cấp hash demo và cập nhật migration.
 
-Chạy `npm run check`, `npm run test:auth` và `npm run test:integrity`. Test toàn vẹn tự tạo database CruiseWeek1IntegrityTest riêng và xóa sau khi chạy. Chi tiết API/quyền: docs/AUTH.md. Kết quả: docs/AUTH-TEST-RESULTS.md.
+Chạy `npm run check`, `npm run test:auth` và `npm run test:integrity`. Test toàn vẹn tự tạo database CruiseWeek1IntegrityTest riêng và xóa sau khi chạy. Kiểm tra thủ công hàng đợi POS theo `docs/POS-OFFLINE-50.md`. Chi tiết API/quyền: docs/AUTH.md. Kết quả: docs/AUTH-TEST-RESULTS.md.
 
 ## Code cần push
 
