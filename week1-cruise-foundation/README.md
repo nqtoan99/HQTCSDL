@@ -1,6 +1,6 @@
 # Aurora Cruise · mốc nền tảng và tổng quan
 
-Mốc hiện tại: đăng nhập/đăng xuất, mật khẩu băm scrypt, phiên 8 giờ, 8 vai trò, Tổng quan theo booking/chuyến, quản lý chuyến/lịch cảng, đăng ký hoạt động và hủy đăng ký. Hành khách hủy ngay trên giao diện; SQL kiểm tra quyền sở hữu, hạn hủy, trạng thái check-in, tài khoản chưa chốt, phần trăm hoàn phí và giữ giao dịch bằng trạng thái `REFUNDED`. Chưa có kiểm tra trùng lịch, check-in, POS và cập nhật tài chính. Không phụ thuộc thư mục `cruise-sql` khi chạy.
+Mốc hiện tại: đăng nhập/đăng xuất, mật khẩu băm scrypt, phiên 8 giờ, 8 vai trò, Tổng quan theo booking/chuyến, quản lý chuyến/lịch cảng, đăng ký hoạt động, hủy đăng ký và phần đầu quản trị người dùng. API quản trị có thể tạo/sửa/khóa tài khoản, đổi mật khẩu và cấp nhiều vai trò; SQL bảo vệ tài khoản quản trị đang thao tác và quản trị viên hoạt động cuối cùng. Chưa có giao diện quản trị đầy đủ, kiểm tra trùng lịch, check-in, POS và cập nhật tài chính. Không phụ thuộc thư mục `cruise-sql` khi chạy.
 
 ## Chạy
 
@@ -36,7 +36,7 @@ Trong dữ liệu mẫu, gói Premium bao gồm hoạt động Đêm nhạc trê
 
 ## SQL và kiểm tra
 
-Setup chạy 01-schema → 03-seed → 04-auth → 05-itinerary → 06-registration → 07-cancellation trên DB mới. Với DB CruiseWeek1 hiện có, setup giữ dữ liệu rồi chạy các migration để cập nhật lịch trình, đăng ký và hủy/hoàn phí. Seed không gọi usp_Register. Nếu dùng SSMS bật SQLCMD Mode. Sau khi chạy SQL bằng tay, chạy setup để cấp hash demo và cập nhật migration.
+Setup chạy 01-schema → 03-seed → 04-auth → 05-itinerary → 06-registration → 07-cancellation → 08-admin trên DB mới. Với DB CruiseWeek1 hiện có, setup giữ dữ liệu rồi chạy các migration để cập nhật lịch trình, đăng ký, hủy/hoàn phí và quản trị. Seed không gọi usp_Register. Nếu dùng SSMS bật SQLCMD Mode. Sau khi chạy SQL bằng tay, chạy setup để cấp hash demo và cập nhật migration.
 
 Chạy npm run check và npm run test:auth. Test dùng SQL Server thật, cổng tạm và một fixture tài khoản được dọn sau kiểm tra. Chi tiết API/quyền: docs/AUTH.md. Kết quả: docs/AUTH-TEST-RESULTS.md. ERD/DICTIONARY/DESIGN/REQUIREMENTS cũ mô tả thiết kế đích, chưa phải toàn bộ chức năng đã triển khai.
 

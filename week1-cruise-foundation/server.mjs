@@ -4,7 +4,7 @@ import {readFile} from 'node:fs/promises';
 import {randomBytes} from 'node:crypto';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {query,jsonQuery,literal,verifyPassword} from './src/db.mjs';
+import {query,jsonQuery,literal,verifyPassword,hashPassword} from './src/db.mjs';
 const root=fileURLToPath(new URL('./public/',import.meta.url));
 const port=Number(process.env.PORT||3001),cookieName='aurora_week1';
 const sessions=new Map(),attempts=new Map(),ttl=Number(process.env.SESSION_TTL_SECONDS||28800)*1000;
@@ -115,6 +115,17 @@ const server=http.createServer(async(req,res)=>{
     await runProcedure(`EXEC dbo.usp_CancelRegistration @RegistrationId=${registrationId},@ActorId=${u.UserId},@Reason=${literal(reason)};`);
     const rows=await jsonQuery(`SELECT RegistrationId,Status,CancelledAt,CancelledBy,CancelReason,RefundAmount FROM dbo.Registrations WHERE RegistrationId=${registrationId} FOR JSON PATH`);
     return send(200,rows[0]);
+   }
+   if(req.method==='POST'&&url.pathname==='/api/admin/users'){
+    requireRoles(u,'ADMIN');const b=await requestJson(req),userId=maybeId(b.userId),name=text(b.name,100).trim(),email=text(b.email,150).trim().toLowerCase();
+    if(typeof b.active!=='boolean')fail(400,'Trạng thái tài khoản không hợp lệ.');
+    if(!Array.isArray(b.roles)||!b.roles.length||b.roles.length>Object.keys(roles).length||b.roles.some(r=>typeof r!=='string'||!Object.hasOwn(roles,r))||new Set(b.roles).size!==b.roles.length)fail(400,'Danh sách vai trò không hợp lệ.');
+    let passwordHash=null;if(b.password!==undefined&&b.password!==''){const password=text(b.password,100);if(password.length<8)fail(400,'Mật khẩu phải có ít nhất 8 ký tự.');passwordHash=hashPassword(password);}
+    if(userId===0&&!passwordHash)fail(400,'Người dùng mới phải có mật khẩu.');
+    await runProcedure(`EXEC dbo.usp_AdminSaveUser @ActorId=${u.UserId},@UserId=${userId},@Name=${literal(name)},@Email=${literal(email)},@Active=${b.active?1:0},@RoleCodes=${literal(b.roles.join(','))},@PasswordHash=${literal(passwordHash)};`);
+    const saved=(await jsonQuery(`SELECT u.UserId,u.Name,u.Email,u.Active,JSON_QUERY((SELECT r.Code FROM UserRoles ur JOIN Roles r ON r.RoleId=ur.RoleId WHERE ur.UserId=u.UserId FOR JSON PATH)) AS roles FROM Users u WHERE u.Email=${literal(email)} FOR JSON PATH`))[0];
+    for(const [sid,session] of sessions)if(session.userId===saved.UserId)sessions.delete(sid);
+    return send(userId===0?201:200,saved);
    }
    if(req.method!=='GET')fail(405,'Phương thức không được hỗ trợ cho API này.');
    if(url.pathname==='/api/me')return send(200,u);
