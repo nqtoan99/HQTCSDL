@@ -99,6 +99,13 @@ const server=http.createServer(async(req,res)=>{
     const rows=await jsonQuery(`SELECT r.RegistrationId,r.ActivityId,r.BookingId,r.Status,r.PriceAtRegistration,r.CreatedAt,CASE WHEN r.Status='WAITLIST' THEN (SELECT COUNT(*) FROM dbo.Registrations w WHERE w.ActivityId=r.ActivityId AND w.Status='WAITLIST' AND (w.CreatedAt<r.CreatedAt OR (w.CreatedAt=r.CreatedAt AND w.RegistrationId<=r.RegistrationId))) END AS WaitlistPosition FROM dbo.Registrations r WHERE r.BookingId=${bookingId} AND r.ActivityId=${activityId} FOR JSON PATH`);
     return send(201,rows[0]);
    }
+   const cancelMatch=/^\/api\/registrations\/(\d+)\/cancel$/.exec(url.pathname);
+   if(req.method==='POST'&&cancelMatch){
+    const registrationId=id(cancelMatch[1]),body=await requestJson(req),reason=text(body.reason,500).trim();
+    await runProcedure(`EXEC dbo.usp_CancelRegistration @RegistrationId=${registrationId},@ActorId=${u.UserId},@Reason=${literal(reason)};`);
+    const rows=await jsonQuery(`SELECT RegistrationId,Status,CancelledAt,CancelledBy,CancelReason,RefundAmount FROM dbo.Registrations WHERE RegistrationId=${registrationId} FOR JSON PATH`);
+    return send(200,rows[0]);
+   }
    if(req.method!=='GET')fail(405,'Phương thức không được hỗ trợ cho API này.');
    if(url.pathname==='/api/me')return send(200,u);
    if(url.pathname==='/api/state')return send(200,await state(u));
