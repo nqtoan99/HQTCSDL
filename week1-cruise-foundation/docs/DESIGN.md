@@ -2,7 +2,7 @@
 
 ## Kiến trúc
 
-React responsive → HTTP API Node.js → sqlcmd Windows Authentication → SQL Server. Frontend lấy danh mục và trạng thái từ API, gửi ID/đầu vào nghiệp vụ. API không nhận giá giao dịch hoặc UserId nhân viên do client tự chọn; lấy actor từ phiên đã đăng nhập. Chuỗi được escape thành literal Unicode, tên procedure/parameter do code cố định. SQLCMD được gọi bằng spawn, không qua shell; JSON được chuyển qua hex UTF-16 để giữ đúng tiếng Việt trên Windows console ẩn.
+HTML/CSS/JavaScript responsive → HTTP API Node.js → sqlcmd Windows Authentication → SQL Server. Frontend lấy dữ liệu từ API, gửi ID/đầu vào nghiệp vụ. API không nhận giá giao dịch hoặc UserId nhân viên do client tự chọn; lấy actor từ phiên đã đăng nhập. Chuỗi được escape thành literal Unicode, tên procedure/parameter do code cố định. SQLCMD được gọi bằng spawn, không qua shell; JSON được chuyển qua hex UTF-16 để giữ đúng tiếng Việt trên Windows console ẩn.
 
 Các thao tác cập nhật nhiều bảng dùng SET XACT_ABORT ON, BEGIN TRY/BEGIN CATCH, BEGIN TRAN/COMMIT và ROLLBACK khi lỗi. Khóa UPDLOCK/HOLDLOCK trên hoạt động và tài khoản tuần tự hóa đăng ký, ghi chi phí, hủy và chốt hóa đơn. UNIQUE ngăn đăng ký lặp, check-in lặp, hóa đơn lặp và UUID giao dịch lặp. Filtered unique index chỉ cho một khoản phí đăng ký POSTED, cho phép giữ lịch sử phí REFUNDED khi đăng ký lại.
 
@@ -24,7 +24,7 @@ Các bảng danh mục, quan hệ và chứng từ được tách theo thực th
 - Tour có nhóm/xe/hướng dẫn viên. Chỉ registration đúng tour và CONFIRMED được gán nhóm. Nhân viên SHORE ghi ReturnedAt. Cảnh báo chưa về phát sinh khi còn dưới 30 phút đến giờ rời cảng và tiếp tục sau giờ đó.
 - POS xác thực mã, lấy gói/giá trong DB, ghi chi phí tạm tính. UUID ClientId giữ nguyên qua các lần gửi. Receipt và charge được commit cùng nhau; payload khác dùng UUID cũ bị từ chối.
 - Chỉ FINANCE/ADMIN được void/hoàn giao dịch POS, giải quyết tranh chấp và chốt hóa đơn. Chốt bị chặn khi còn dispute OPEN hoặc giao dịch POS chưa được đối soát. Đối soát lưu ReconciledAt/ReconciledBy. Không thu tiền qua ngân hàng; payment DEMO là mô phỏng xác nhận đã thu.
-- Chỉ chủ booking gửi dispute/feedback. Feedback hoạt động yêu cầu đã check-in và đã kết thúc; feedback chuyến yêu cầu EndDate đã qua hoặc CLOSED.
+- Chỉ chủ booking gửi dispute/feedback. `usp_SubmitPassengerDispute` xác minh chủ giao dịch ở SQL và ngăn tranh chấp OPEN trùng; tranh chấp mở chặn chốt tài khoản. Feedback hoạt động yêu cầu đã check-in và đã kết thúc; feedback chuyến yêu cầu EndDate đã qua hoặc CLOSED.
 - Lịch mới phải nằm trong chuyến, không chồng điểm dừng và không cắt tour bờ. Thay đổi lịch lưu thời gian cũ/mới, lý do, actor và thông báo trong cùng transaction.
 - Định danh có thể bị vô hiệu; không xóa chứng từ đã dùng. Đóng tài khoản ngăn ghi thêm chi phí/đăng ký. Không tự tước quyền hoặc khóa tài khoản admin đang thao tác.
 

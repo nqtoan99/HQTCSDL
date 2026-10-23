@@ -47,7 +47,7 @@ function passengerFinanceQuery(u){
    ORDER BY ac.AccountId FOR JSON PATH)) AS accounts,
   JSON_QUERY((SELECT t.TransactionId,t.AccountId,t.RegistrationId,t.ServiceId,t.DeviceId,t.Quantity,t.Amount,t.Status,t.RefundAmount,t.RefundedAt,t.CreatedAt,
    COALESCE(s.Name,a.Name,N'Dịch vụ') AS Description,CONVERT(decimal(18,2),CASE t.Status WHEN 'POSTED' THEN t.Amount WHEN 'REFUNDED' THEN t.Amount-COALESCE(t.RefundAmount,0) ELSE 0 END) AS NetAmount,
-   JSON_QUERY((SELECT d.DisputeId,d.Reason,d.Status,d.SubmittedAt,d.ResolvedAt,d.Resolution FROM dbo.Disputes d WHERE d.TransactionId=t.TransactionId AND d.SubmittedBy=${u.UserId} ORDER BY d.SubmittedAt DESC FOR JSON PATH)) AS disputes
+   JSON_QUERY((SELECT d.DisputeId,d.Reason,d.Status,d.SubmittedAt,d.ResolvedAt,d.Resolution FROM dbo.Disputes d WHERE d.TransactionId=t.TransactionId ORDER BY d.SubmittedAt DESC FOR JSON PATH)) AS disputes
    FROM dbo.Transactions t JOIN dbo.Accounts ac ON ac.AccountId=t.AccountId ${owner}
    LEFT JOIN dbo.Services s ON s.ServiceId=t.ServiceId LEFT JOIN dbo.Registrations r ON r.RegistrationId=t.RegistrationId LEFT JOIN dbo.Activities a ON a.ActivityId=r.ActivityId
    ORDER BY t.CreatedAt DESC,t.TransactionId DESC FOR JSON PATH)) AS transactions,

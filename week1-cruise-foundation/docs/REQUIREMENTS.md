@@ -1,6 +1,6 @@
 # Đối chiếu với đề tài và kế hoạch
 
-Phạm vi của bảng dưới là yêu cầu/thiết kế theo tài liệu và bản gốc `cruise-sql`. Các dòng “Chạy thật” mô tả bản gốc, không khẳng định mọi chức năng đã được port vào repo này. Mốc hiện tại của `HQTCSDL/week1-cruise-foundation` gồm đăng nhập, phân quyền, Tổng quan theo chuyến/booking với thống kê hoạt động, đăng ký, giao dịch và thông báo, cùng tạo/sửa chuyến và lịch trình cảng; tiến độ triển khai trong repo này được ghi ở README.
+Phạm vi bảng dưới là yêu cầu/thiết kế theo tài liệu và bản gốc `cruise-sql`; các dòng “Chạy thật” mô tả mức của bản gốc. Riêng chức năng chi phí hành khách ở tuần 1 đã được triển khai trong repo này: tra cứu tài khoản/giao dịch/hoàn/hóa đơn theo booking của chủ tài khoản và gửi tranh chấp. Phạm vi hiện tại được cập nhật ở README.
 
 Nguồn đối chiếu: De-Tai.docx và 1.docx do người dùng cung cấp. Phạm vi ứng dụng hành khách/POS là web responsive theo trao đổi trong chat và kế hoạch. Bảng này phân biệt phần chạy thật với tích hợp thiết bị/thu tiền được mô phỏng.
 
@@ -21,11 +21,13 @@ Nguồn đối chiếu: De-Tai.docx và 1.docx do người dùng cung cấp. Ph�
 | Định danh QR/thẻ/vòng tay | Identifiers; QR SVG và nhập/quét mã | QR thật; phần cứng thẻ/vòng tay mô phỏng |
 | Check-in, chống lặp, ghi nhân viên/thiết bị | usp_CheckIn, CheckIns UNIQUE | Chạy thật |
 | Tài khoản chi tiêu theo khách/cabin/booking | Accounts theo booking, booking liên kết khách/cabin; báo cáo tổng hợp | Chạy thật; không dùng chung một ví cabin |
+| Chi phí hành khách (tuần 1) | `/api/passenger/finance`, tổng phí tạm tính/đã hoàn, giao dịch ròng, hóa đơn và khoản thanh toán; giới hạn theo chủ booking | Đã triển khai trong week1; thu tiền MOCK mô phỏng |
 | POS ghi chi phí | usp_PostPOS, Transactions | Chạy thật |
 | Void và hoàn tiền có quyền | usp_FinanceTransaction, role FINANCE/ADMIN | Chạy thật |
 | Ngoại tuyến và đồng bộ | localStorage, cache POS, UUID, usp_SyncPOS, SyncReceipts | Chạy thật ở mức đơn giản |
 | Đối soát | usp_Reconcile, ReconciledAt/By, biên nhận đồng bộ, trạng thái và audit | Chạy thật |
 | Tranh chấp | Disputes, usp_Dispute, usp_ResolveDispute | Chạy thật |
+| Hành khách gửi tranh chấp | `usp_SubmitPassengerDispute`, kiểm tra chủ giao dịch, unique filtered index cho tranh chấp OPEN, audit | Đã triển khai trong week1; xử lý tranh chấp do tài chính thực hiện qua SQL |
 | Chốt tài khoản, thanh toán, hóa đơn | usp_Settle, Invoices, Payments | Ghi sổ thật; thu tiền mô phỏng |
 | Xuất hóa đơn | Trang in / Save as PDF của trình duyệt | Chạy thật |
 | Thông báo lịch/tập trung/về tàu | In-app Notifications, tạo tự động khi đổi lịch và gửi thủ công | Chạy thật; không có push/SMS |

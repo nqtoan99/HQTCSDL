@@ -88,6 +88,11 @@ erDiagram
         int TransactionId FK
         nvarchar Reason
         varchar Status
+        datetime2 SubmittedAt
+        int SubmittedBy FK
+        datetime2 ResolvedAt
+        int ResolvedBy FK
+        nvarchar Resolution
     }
     Feedback {
         int FeedbackId PK

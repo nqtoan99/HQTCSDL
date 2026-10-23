@@ -124,6 +124,11 @@
 | TransactionId | int | FK → Transactions.TransactionId | Không |  |
 | Reason | nvarchar(500) |  | Không |  |
 | Status | varchar(10) |  | Không | ('OPEN') |
+| SubmittedAt | datetime2(3) |  | Không | SYSUTCDATETIME() |
+| SubmittedBy | int | FK → Users.UserId | Có |  |
+| ResolvedAt | datetime2(3) |  | Có |  |
+| ResolvedBy | int | FK → Users.UserId | Có |  |
+| Resolution | nvarchar(500) |  | Có |  |
 
 ## Feedback
 
