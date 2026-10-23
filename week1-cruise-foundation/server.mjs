@@ -13,6 +13,8 @@ const roles={PASSENGER:'Hành khách',ITINERARY:'Điều phối hành trình',AC
 const fail=(status,message)=>{throw Object.assign(Error(message),{status});};
 const id=v=>{const n=Number(v);if(!Number.isSafeInteger(n)||n<1)fail(400,'ID không hợp lệ.');return n;};
 const maybeId=v=>v===undefined||v===null||v===''?0:(Number.isSafeInteger(Number(v))&&Number(v)>=0?Number(v):fail(400,'ID không hợp lệ.'));
+const whole=(v,min,max,label='Số')=>{const n=Number(v);if(!Number.isSafeInteger(n)||n<min||n>max)fail(400,`${label} không hợp lệ.`);return n;};
+const amount=(v,label='Số tiền')=>{const n=Number(v);if(!Number.isFinite(n)||n<0||n>1e12)fail(400,`${label} không hợp lệ.`);return n;};
 const text=(v,max)=>{if(typeof v!=='string'||!v.trim()||v.length>max)fail(400,'Dữ liệu không hợp lệ.');return v;};
 function dateOnly(v){const s=text(v,10).trim();if(!/^\d{4}-\d{2}-\d{2}$/.test(s))fail(400,'Ngày không hợp lệ.');const d=new Date(`${s}T00:00:00Z`);if(Number.isNaN(d.getTime())||d.toISOString().slice(0,10)!==s)fail(400,'Ngày không hợp lệ.');return s;}
 function dateTime(v){const s=text(v,19).trim(),m=/^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/.exec(s);if(!m)fail(400,'Giờ cảng không hợp lệ.');dateOnly(m[1]);if(Number(m[2])>23||Number(m[3])>59||Number(m[4]||0)>59)fail(400,'Giờ cảng không hợp lệ.');return `${m[1]}T${m[2]}:${m[3]}:${m[4]||'00'}`;}
@@ -124,12 +126,57 @@ const server=http.createServer(async(req,res)=>{
     if(userId===0&&!passwordHash)fail(400,'Người dùng mới phải có mật khẩu.');
     await runProcedure(`EXEC dbo.usp_AdminSaveUser @ActorId=${u.UserId},@UserId=${userId},@Name=${literal(name)},@Email=${literal(email)},@Active=${b.active?1:0},@RoleCodes=${literal(b.roles.join(','))},@PasswordHash=${literal(passwordHash)};`);
     const saved=(await jsonQuery(`SELECT u.UserId,u.Name,u.Email,u.Active,JSON_QUERY((SELECT r.Code FROM UserRoles ur JOIN Roles r ON r.RoleId=ur.RoleId WHERE ur.UserId=u.UserId FOR JSON PATH)) AS roles FROM Users u WHERE u.Email=${literal(email)} FOR JSON PATH`))[0];
-    for(const [sid,session] of sessions)if(session.userId===saved.UserId)sessions.delete(sid);
+    const currentSession=sessionId(req);for(const [sid,session] of sessions)if(session.userId===saved.UserId&&sid!==currentSession)sessions.delete(sid);
     return send(userId===0?201:200,saved);
+   }
+   if(req.method==='POST'&&url.pathname==='/api/admin/catalogs'){
+    requireRoles(u,'ADMIN');const b=await requestJson(req),entity=text(b.entity,20).trim().toLowerCase(),catalogId=maybeId(b.catalogId),supported=['ship','zone','cabin','port','provider','service','package','device'];
+    if(!supported.includes(entity))fail(400,'Danh mục không được hỗ trợ.');
+    const name=entity==='cabin'?null:text(b.name,150).trim(),number=entity==='cabin'?text(b.number,20).trim():null,parentId=['zone','cabin'].includes(entity)?id(b.parentId):null,capacity=entity==='ship'?whole(b.capacity,1,100000,'Sức chứa'):null,price=entity==='service'?amount(b.price,'Giá dịch vụ'):null,kind=entity==='device'?text(b.kind,20).trim().toUpperCase():null;
+    await runProcedure(`EXEC dbo.usp_AdminSaveCatalog @ActorId=${u.UserId},@Entity=${literal(entity)},@Id=${catalogId},@Name=${literal(name)},@ParentId=${literal(parentId)},@Number=${literal(number)},@Capacity=${literal(capacity)},@Price=${literal(price)},@Kind=${literal(kind)};`);
+    return send(catalogId===0?201:200,{ok:true});
+   }
+   if(req.method==='POST'&&url.pathname==='/api/admin/bookings'){
+    requireRoles(u,'ADMIN');const b=await requestJson(req),bookingId=maybeId(b.bookingId),cruiseId=id(b.cruiseId),userId=id(b.userId),cabinId=id(b.cabinId),packageId=id(b.packageId);
+    await runProcedure(`EXEC dbo.usp_AdminSaveBooking @ActorId=${u.UserId},@BookingId=${bookingId},@CruiseId=${cruiseId},@UserId=${userId},@CabinId=${cabinId},@PackageId=${packageId};`);
+    return send(bookingId===0?201:200,{ok:true});
+   }
+   if(req.method==='POST'&&url.pathname==='/api/admin/package-services'){
+    requireRoles(u,'ADMIN');const b=await requestJson(req);if(typeof b.included!=='boolean')fail(400,'Trạng thái dịch vụ trong gói không hợp lệ.');
+    await runProcedure(`EXEC dbo.usp_AdminPackageService @ActorId=${u.UserId},@PackageId=${id(b.packageId)},@ServiceId=${id(b.serviceId)},@Included=${b.included?1:0};`);return send(200,{ok:true});
+   }
+   if(req.method==='POST'&&url.pathname==='/api/admin/policy'){
+    requireRoles(u,'ADMIN');const b=await requestJson(req),cancelHours=whole(b.cancelHours,0,8760,'Số giờ hủy'),refundPercent=whole(b.refundPercent,0,100,'Tỷ lệ hoàn phí');
+    await runProcedure(`EXEC dbo.usp_AdminSavePolicy @ActorId=${u.UserId},@CancelHours=${cancelHours},@RefundPercent=${refundPercent};`);return send(200,{ok:true});
+   }
+   const identifierMatch=/^\/api\/admin\/identifiers\/(\d+)\/active$/.exec(url.pathname);
+   if(req.method==='POST'&&identifierMatch){
+    requireRoles(u,'ADMIN');const b=await requestJson(req);if(typeof b.active!=='boolean')fail(400,'Trạng thái mã định danh không hợp lệ.');
+    await runProcedure(`EXEC dbo.usp_AdminSetIdentifierActive @ActorId=${u.UserId},@IdentifierId=${id(identifierMatch[1])},@Active=${b.active?1:0};`);return send(200,{ok:true});
    }
    if(req.method!=='GET')fail(405,'Phương thức không được hỗ trợ cho API này.');
    if(url.pathname==='/api/me')return send(200,u);
    if(url.pathname==='/api/state')return send(200,await state(u));
+   if(url.pathname==='/api/admin/data'){
+    requireRoles(u,'ADMIN');return send(200,await jsonQuery(`SELECT
+     JSON_QUERY((SELECT u.UserId,u.Name,u.Email,u.Active,JSON_QUERY((SELECT r.Code FROM UserRoles ur JOIN Roles r ON r.RoleId=ur.RoleId WHERE ur.UserId=u.UserId FOR JSON PATH)) AS roles FROM Users u ORDER BY u.UserId FOR JSON PATH)) AS users,
+     JSON_QUERY((SELECT RoleId,Code,Name FROM Roles ORDER BY RoleId FOR JSON PATH)) AS roles,
+     JSON_QUERY((SELECT CruiseId,ShipId,Name,StartDate,EndDate,Status FROM Cruises ORDER BY CruiseId FOR JSON PATH)) AS cruises,
+     JSON_QUERY((SELECT ShipId,Name,Capacity FROM Ships ORDER BY ShipId FOR JSON PATH)) AS ships,
+     JSON_QUERY((SELECT ZoneId,ShipId,Name FROM Zones ORDER BY ZoneId FOR JSON PATH)) AS zones,
+     JSON_QUERY((SELECT CabinId,ShipId,Number FROM Cabins ORDER BY CabinId FOR JSON PATH)) AS cabins,
+     JSON_QUERY((SELECT PortId,Name FROM Ports ORDER BY PortId FOR JSON PATH)) AS ports,
+     JSON_QUERY((SELECT ProviderId,Name FROM Providers ORDER BY ProviderId FOR JSON PATH)) AS providers,
+     JSON_QUERY((SELECT ServiceId,Name,Price FROM Services ORDER BY ServiceId FOR JSON PATH)) AS services,
+     JSON_QUERY((SELECT PackageId,Name FROM Packages ORDER BY PackageId FOR JSON PATH)) AS packages,
+     JSON_QUERY((SELECT PackageId,ServiceId FROM PackageServices ORDER BY PackageId,ServiceId FOR JSON PATH)) AS packageServices,
+     JSON_QUERY((SELECT DeviceId,Name,Kind FROM Devices ORDER BY DeviceId FOR JSON PATH)) AS devices,
+     JSON_QUERY((SELECT p.PassengerId,u.UserId,u.Name,u.Active FROM Passengers p JOIN Users u ON u.UserId=p.UserId ORDER BY p.PassengerId FOR JSON PATH)) AS passengers,
+     JSON_QUERY((SELECT b.BookingId,b.CruiseId,p.UserId,b.CabinId,b.PackageId,u.Name,c.Name AS Cruise,cb.Number AS Cabin,pk.Name AS Package FROM Bookings b JOIN Passengers p ON p.PassengerId=b.PassengerId JOIN Users u ON u.UserId=p.UserId JOIN Cruises c ON c.CruiseId=b.CruiseId JOIN Cabins cb ON cb.CabinId=b.CabinId JOIN Packages pk ON pk.PackageId=b.PackageId ORDER BY b.BookingId FOR JSON PATH)) AS bookings,
+     JSON_QUERY((SELECT IdentifierId,BookingId,Code,Kind,Active FROM Identifiers ORDER BY IdentifierId FOR JSON PATH)) AS identifiers,
+     JSON_QUERY((SELECT PolicyId,CancelHours,RefundPercent FROM Policy WHERE PolicyId=1 FOR JSON PATH)) AS policy
+     FOR JSON PATH,WITHOUT_ARRAY_WRAPPER`));
+   }
    if(url.pathname==='/api/admin/users'){requireRoles(u,'ADMIN');return send(200,await jsonQuery('SELECT u.UserId,u.Name,u.Email,u.Active,JSON_QUERY((SELECT r.Code FROM UserRoles ur JOIN Roles r ON r.RoleId=ur.RoleId WHERE ur.UserId=u.UserId FOR JSON PATH)) AS roles FROM Users u FOR JSON PATH'));}
    if(url.pathname.startsWith('/api/departments/')){const role=url.pathname.slice('/api/departments/'.length);if(!Object.hasOwn(roles,role))fail(404,'Bộ phận không tồn tại.');requireRoles(u,role);return send(200,{role,name:roles[role],message:'Quyền truy cập đã được kiểm tra tại backend.'});}
    if(/^\/api\/bookings\/[^/]+$/.test(url.pathname)){requireRoles(u,'PASSENGER','FINANCE');const rows=await jsonQuery(bookingQuery(u,url.pathname.split('/').pop())+' FOR JSON PATH');if(!rows.length)fail(403,'Không có quyền xem đặt chỗ này hoặc đặt chỗ không tồn tại.');return send(200,rows[0]);}
