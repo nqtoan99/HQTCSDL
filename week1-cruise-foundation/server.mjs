@@ -38,7 +38,7 @@ async function state(u){
  const itineraryAccess=u.roles.some(r=>['ITINERARY','ADMIN'].includes(r));
  const kind=u.roles.includes('ADMIN')?'':u.roles.includes('ACTIVITY')&&!u.roles.includes('SHORE')?" AND Kind='ONBOARD'":u.roles.includes('SHORE')&&!u.roles.includes('ACTIVITY')?" AND Kind='SHORE'":'';
  const registrationStats=guest
-  ?`SELECT r.RegistrationId,a.ActivityId,a.CruiseId,r.BookingId,r.Status,r.PriceAtRegistration,r.CreatedAt,CASE WHEN r.Status='CONFIRMED' THEN 1 ELSE 0 END AS Confirmed,CASE WHEN r.Status='WAITLIST' THEN 1 ELSE 0 END AS Waitlist FROM Activities a JOIN Registrations r ON r.ActivityId=a.ActivityId JOIN Bookings b ON b.BookingId=r.BookingId JOIN Passengers p ON p.PassengerId=b.PassengerId WHERE a.CruiseId IN(${cs}) AND p.UserId=${u.UserId}${kind}`
+  ?`SELECT r.RegistrationId,a.ActivityId,a.CruiseId,r.BookingId,r.Status,r.PriceAtRegistration,r.CreatedAt,CASE WHEN r.Status='CONFIRMED' THEN 1 ELSE 0 END AS Confirmed,CASE WHEN r.Status='WAITLIST' THEN 1 ELSE 0 END AS Waitlist,CASE WHEN r.Status='WAITLIST' THEN (SELECT COUNT(*) FROM Registrations w WHERE w.ActivityId=r.ActivityId AND w.Status='WAITLIST' AND (w.CreatedAt<r.CreatedAt OR (w.CreatedAt=r.CreatedAt AND w.RegistrationId<=r.RegistrationId))) END AS WaitlistPosition FROM Activities a JOIN Registrations r ON r.ActivityId=a.ActivityId JOIN Bookings b ON b.BookingId=r.BookingId JOIN Passengers p ON p.PassengerId=b.PassengerId WHERE a.CruiseId IN(${cs}) AND p.UserId=${u.UserId}${kind}`
   :`SELECT a.ActivityId,a.CruiseId,SUM(CASE WHEN r.Status='CONFIRMED' THEN 1 ELSE 0 END) AS Confirmed,SUM(CASE WHEN r.Status='WAITLIST' THEN 1 ELSE 0 END) AS Waitlist FROM Activities a LEFT JOIN Registrations r ON r.ActivityId=a.ActivityId WHERE a.CruiseId IN(${cs})${kind} GROUP BY a.ActivityId,a.CruiseId`;
  const historyQuery=itineraryAccess?`SELECT h.ChangeId,h.CruiseId,h.ChangeType,h.Subject,h.OldSchedule,h.NewSchedule,h.Reason,h.Staff,h.CreatedAt FROM (
   SELECT cc.ChangeId,cc.CruiseId,cc.ChangeType,CONCAT(N'Chuyến: ',cc.NewName) AS Subject,
@@ -96,7 +96,7 @@ const server=http.createServer(async(req,res)=>{
     const allowed=await jsonQuery(bookingQuery(u,bookingId)+' FOR JSON PATH');
     if(!allowed.length)fail(403,'Không có quyền đăng ký cho booking này.');
     await runProcedure(`EXEC dbo.usp_Register @BookingId=${bookingId},@ActivityId=${activityId},@ActorId=${u.UserId};`);
-    const rows=await jsonQuery(`SELECT RegistrationId,ActivityId,BookingId,Status,PriceAtRegistration,CreatedAt FROM dbo.Registrations WHERE BookingId=${bookingId} AND ActivityId=${activityId} FOR JSON PATH`);
+    const rows=await jsonQuery(`SELECT r.RegistrationId,r.ActivityId,r.BookingId,r.Status,r.PriceAtRegistration,r.CreatedAt,CASE WHEN r.Status='WAITLIST' THEN (SELECT COUNT(*) FROM dbo.Registrations w WHERE w.ActivityId=r.ActivityId AND w.Status='WAITLIST' AND (w.CreatedAt<r.CreatedAt OR (w.CreatedAt=r.CreatedAt AND w.RegistrationId<=r.RegistrationId))) END AS WaitlistPosition FROM dbo.Registrations r WHERE r.BookingId=${bookingId} AND r.ActivityId=${activityId} FOR JSON PATH`);
     return send(201,rows[0]);
    }
    if(req.method!=='GET')fail(405,'Phương thức không được hỗ trợ cho API này.');

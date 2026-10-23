@@ -1,6 +1,6 @@
 # Aurora Cruise · mốc nền tảng và tổng quan
 
-Mốc hiện tại: đăng nhập/đăng xuất, mật khẩu băm scrypt, phiên 8 giờ, 8 vai trò, Tổng quan theo booking/chuyến, quản lý chuyến/lịch cảng và phần đầu nghiệp vụ đăng ký hoạt động. Hành khách có thể đăng ký đúng hoạt động trong chuyến của booking; SQL chống đăng ký trùng, khóa sức chứa, đưa khách vào danh sách chờ và lưu mức giá theo gói tại thời điểm đăng ký. Chưa có hủy đăng ký, kiểm tra trùng lịch, tự chuyển danh sách chờ, check-in, POS và cập nhật tài chính. Không phụ thuộc thư mục `cruise-sql` khi chạy.
+Mốc hiện tại: đăng nhập/đăng xuất, mật khẩu băm scrypt, phiên 8 giờ, 8 vai trò, Tổng quan theo booking/chuyến, quản lý chuyến/lịch cảng và nghiệp vụ đăng ký hoạt động. Hành khách có thể đăng ký đúng hoạt động trong chuyến của booking; SQL chống đăng ký trùng, khóa sức chứa, tính giá theo gói, hiển thị vị trí chờ và tự chuyển khách chờ theo thứ tự khi có chỗ. Chưa có hủy đăng ký, kiểm tra trùng lịch, check-in, POS và cập nhật tài chính. Không phụ thuộc thư mục `cruise-sql` khi chạy.
 
 ## Chạy
 
@@ -17,7 +17,7 @@ Mở http://localhost:3001 hoặc nhấp đúp CHAY-WEB.cmd. Database riêng Cru
 
 Mật khẩu demo: Aurora123! Mỗi tài khoản được lưu hash với salt riêng.
 
-Trong dữ liệu mẫu, gói Premium bao gồm hoạt động Đêm nhạc trên biển; gói Tiêu chuẩn giữ mức phí niêm yết. Mức giá được chốt khi tạo đăng ký.
+Trong dữ liệu mẫu, gói Premium bao gồm hoạt động Đêm nhạc trên biển; gói Tiêu chuẩn giữ mức phí niêm yết. Mức giá được chốt khi tạo đăng ký. Khi một đăng ký đã xác nhận bị hủy hoặc sức chứa hoạt động được tăng, booking chờ đầu tiên được tự động xác nhận và phí mới được ghi vào tài khoản.
 
 | Vai trò | Email |
 |---|---|
@@ -32,7 +32,7 @@ Trong dữ liệu mẫu, gói Premium bao gồm hoạt động Đêm nhạc trê
 
 ## Mốc đã triển khai và phần tiếp theo
 
-Đã hoàn tất lát cắt Tổng quan theo yêu cầu: chọn booking/chuyến, thông tin hành trình, trạng thái và điểm dừng, hoạt động kèm sức chứa/đăng ký, chi phí và các giao dịch gần đây theo quyền, thông báo gần đây và lịch trải nghiệm tiếp theo. Cũng đã có đăng nhập/phân quyền, tạo/sửa chuyến, quản lý điểm dừng, đổi giờ cảng có kiểm tra xung đột tour, lưu lý do/lịch sử và tự tạo thông báo. Phần tiếp theo là nghiệp vụ ghi đăng ký/hủy, check-in, ghi nhận POS và đối soát tài chính.
+Đã hoàn tất lát cắt Tổng quan theo yêu cầu: chọn booking/chuyến, thông tin hành trình, trạng thái và điểm dừng, hoạt động kèm sức chứa/đăng ký, chi phí và các giao dịch gần đây theo quyền, thông báo gần đây và lịch trải nghiệm tiếp theo. Cũng đã có đăng nhập/phân quyền, tạo/sửa chuyến, quản lý điểm dừng, đổi giờ cảng có kiểm tra xung đột tour, lưu lý do/lịch sử và tự tạo thông báo. Nghiệp vụ đăng ký đã kiểm tra quyền, đúng chuyến, trạng thái hoạt động, sức chứa, giá theo gói, danh sách chờ và tự chuyển khách khi có chỗ. Phần tiếp theo là hủy/hoàn phí, check-in, ghi nhận POS và đối soát tài chính.
 
 ## SQL và kiểm tra
 

@@ -21,6 +21,12 @@ IF NOT EXISTS(SELECT 1 FROM sys.check_constraints WHERE name='CK_Registrations_P
  ALTER TABLE dbo.Registrations ADD CONSTRAINT CK_Registrations_PriceAtRegistration CHECK(PriceAtRegistration IS NULL OR PriceAtRegistration>=0);
 GO
 
+IF NOT EXISTS(SELECT 1 FROM sys.indexes WHERE object_id=OBJECT_ID('dbo.Registrations') AND name='IX_Registrations_WaitlistOrder')
+ CREATE INDEX IX_Registrations_WaitlistOrder
+ ON dbo.Registrations(ActivityId,Status,CreatedAt,RegistrationId)
+ INCLUDE(BookingId,PriceAtRegistration);
+GO
+
 CREATE OR ALTER TRIGGER dbo.tr_RegistrationConsistency ON dbo.Registrations AFTER INSERT,UPDATE AS
 BEGIN
  SET NOCOUNT ON;
@@ -35,6 +41,120 @@ BEGIN
   JOIN (SELECT DISTINCT ActivityId FROM inserted) i ON i.ActivityId=a.ActivityId
   WHERE (SELECT COUNT(*) FROM dbo.Registrations r WHERE r.ActivityId=a.ActivityId AND r.Status='CONFIRMED')>a.Capacity
  ) THROW 51261,N'Hoạt động đã vượt quá sức chứa.',1;
+END;
+GO
+
+CREATE OR ALTER PROCEDURE dbo.usp_PromoteActivityWaitlist
+ @ActivityId int,
+ @ActorId int=NULL
+AS
+BEGIN
+ SET NOCOUNT ON;
+ SET XACT_ABORT ON;
+ BEGIN TRY
+  BEGIN TRAN;
+
+  DECLARE @Capacity int,@ActivityStatus varchar(20),@StartsAt datetime2,
+          @Available int,@Promoted int=0,@RegistrationId int,@AccountId int,
+          @Price decimal(18,2);
+
+  SELECT @Capacity=a.Capacity,@ActivityStatus=a.Status,@StartsAt=a.StartsAt
+  FROM dbo.Activities a WITH(UPDLOCK,HOLDLOCK)
+  WHERE a.ActivityId=@ActivityId;
+
+  IF @Capacity IS NULL THROW 51268,N'Hoạt động không tồn tại.',1;
+
+  IF @ActivityStatus='OPEN' AND @StartsAt>SYSDATETIME()
+  BEGIN
+   SET @Available=@Capacity-(
+    SELECT COUNT(*) FROM dbo.Registrations
+    WHERE ActivityId=@ActivityId AND Status='CONFIRMED'
+   );
+
+   IF @ActorId IS NOT NULL
+    EXEC sys.sp_set_session_context @key=N'ActorId',@value=@ActorId;
+
+   WHILE @Available>0
+   BEGIN
+    SET @RegistrationId=NULL;
+    SELECT TOP(1)
+     @RegistrationId=r.RegistrationId,
+     @AccountId=ac.AccountId,
+     @Price=COALESCE(r.PriceAtRegistration,a.Fee)
+    FROM dbo.Registrations r WITH(UPDLOCK,READPAST,ROWLOCK)
+    JOIN dbo.Activities a ON a.ActivityId=r.ActivityId
+    JOIN dbo.Accounts ac ON ac.BookingId=r.BookingId AND ac.Status='OPEN'
+    WHERE r.ActivityId=@ActivityId AND r.Status='WAITLIST'
+    ORDER BY r.CreatedAt,r.RegistrationId;
+
+    IF @RegistrationId IS NULL BREAK;
+
+    UPDATE dbo.Registrations
+    SET Status='CONFIRMED',PriceAtRegistration=@Price
+    WHERE RegistrationId=@RegistrationId AND Status='WAITLIST';
+
+    IF @@ROWCOUNT=1
+    BEGIN
+     IF NOT EXISTS(SELECT 1 FROM dbo.Transactions WHERE RegistrationId=@RegistrationId)
+      INSERT dbo.Transactions(AccountId,RegistrationId,Amount)
+      VALUES(@AccountId,@RegistrationId,@Price);
+     SET @Promoted+=1;
+     SET @Available-=1;
+    END
+   END
+  END
+
+  COMMIT;
+  SELECT @Promoted AS PromotedCount;
+ END TRY
+ BEGIN CATCH
+  IF @@TRANCOUNT>0 ROLLBACK;
+  THROW;
+ END CATCH
+END;
+GO
+
+CREATE OR ALTER TRIGGER dbo.tr_RegistrationWaitlistPromotion
+ON dbo.Registrations AFTER UPDATE,DELETE AS
+BEGIN
+ SET NOCOUNT ON;
+ DECLARE @ActivityId int,@ActorId int=TRY_CONVERT(int,SESSION_CONTEXT(N'ActorId'));
+ DECLARE activity_cursor CURSOR LOCAL FAST_FORWARD FOR
+  SELECT DISTINCT d.ActivityId
+  FROM deleted d
+  LEFT JOIN inserted i ON i.RegistrationId=d.RegistrationId
+  WHERE d.Status='CONFIRMED' AND (i.RegistrationId IS NULL OR i.Status<>'CONFIRMED');
+ OPEN activity_cursor;
+ FETCH NEXT FROM activity_cursor INTO @ActivityId;
+ WHILE @@FETCH_STATUS=0
+ BEGIN
+  EXEC dbo.usp_PromoteActivityWaitlist @ActivityId=@ActivityId,@ActorId=@ActorId;
+  FETCH NEXT FROM activity_cursor INTO @ActivityId;
+ END
+ CLOSE activity_cursor;
+ DEALLOCATE activity_cursor;
+END;
+GO
+
+CREATE OR ALTER TRIGGER dbo.tr_ActivityCapacityWaitlistPromotion
+ON dbo.Activities AFTER UPDATE AS
+BEGIN
+ SET NOCOUNT ON;
+ IF NOT UPDATE(Capacity) RETURN;
+ DECLARE @ActivityId int,@ActorId int=TRY_CONVERT(int,SESSION_CONTEXT(N'ActorId'));
+ DECLARE activity_cursor CURSOR LOCAL FAST_FORWARD FOR
+  SELECT i.ActivityId
+  FROM inserted i JOIN deleted d ON d.ActivityId=i.ActivityId
+  WHERE i.Capacity>d.Capacity;
+ OPEN activity_cursor;
+ FETCH NEXT FROM activity_cursor INTO @ActivityId;
+ WHILE @@FETCH_STATUS=0
+ BEGIN
+  EXEC dbo.usp_PromoteActivityWaitlist @ActivityId=@ActivityId,@ActorId=@ActorId;
+  FETCH NEXT FROM activity_cursor INTO @ActivityId;
+ END
+ CLOSE activity_cursor;
+ DEALLOCATE activity_cursor;
 END;
 GO
 
