@@ -38,7 +38,16 @@ async function state(u){
  const itineraryAccess=u.roles.some(r=>['ITINERARY','ADMIN'].includes(r));
  const kind=u.roles.includes('ADMIN')?'':u.roles.includes('ACTIVITY')&&!u.roles.includes('SHORE')?" AND Kind='ONBOARD'":u.roles.includes('SHORE')&&!u.roles.includes('ACTIVITY')?" AND Kind='SHORE'":'';
  const registrationStats=guest
-  ?`SELECT r.RegistrationId,a.ActivityId,a.CruiseId,r.BookingId,r.Status,r.PriceAtRegistration,r.CreatedAt,CASE WHEN r.Status='CONFIRMED' THEN 1 ELSE 0 END AS Confirmed,CASE WHEN r.Status='WAITLIST' THEN 1 ELSE 0 END AS Waitlist,CASE WHEN r.Status='WAITLIST' THEN (SELECT COUNT(*) FROM Registrations w WHERE w.ActivityId=r.ActivityId AND w.Status='WAITLIST' AND (w.CreatedAt<r.CreatedAt OR (w.CreatedAt=r.CreatedAt AND w.RegistrationId<=r.RegistrationId))) END AS WaitlistPosition FROM Activities a JOIN Registrations r ON r.ActivityId=a.ActivityId JOIN Bookings b ON b.BookingId=r.BookingId JOIN Passengers p ON p.PassengerId=b.PassengerId WHERE a.CruiseId IN(${cs}) AND p.UserId=${u.UserId}${kind}`
+  ?`SELECT r.RegistrationId,a.ActivityId,a.CruiseId,r.BookingId,r.Status,r.PriceAtRegistration,r.CreatedAt,
+    r.CancelledAt,r.CancelledBy,r.CancelReason,r.RefundAmount,DATEADD(hour,-pol.CancelHours,a.StartsAt) AS CancelDeadline,
+    pol.RefundPercent,CAST(CASE WHEN ci.RegistrationId IS NULL THEN 0 ELSE 1 END AS bit) AS HasCheckedIn,
+    CAST(CASE WHEN r.Status IN('CONFIRMED','WAITLIST') AND ci.RegistrationId IS NULL AND SYSDATETIME()<=DATEADD(hour,-pol.CancelHours,a.StartsAt) AND ac.Status='OPEN' THEN 1 ELSE 0 END AS bit) AS CanCancel,
+    CASE WHEN r.Status='CONFIRMED' THEN 1 ELSE 0 END AS Confirmed,CASE WHEN r.Status='WAITLIST' THEN 1 ELSE 0 END AS Waitlist,
+    CASE WHEN r.Status='WAITLIST' THEN (SELECT COUNT(*) FROM Registrations w WHERE w.ActivityId=r.ActivityId AND w.Status='WAITLIST' AND (w.CreatedAt<r.CreatedAt OR (w.CreatedAt=r.CreatedAt AND w.RegistrationId<=r.RegistrationId))) END AS WaitlistPosition
+    FROM Activities a JOIN Registrations r ON r.ActivityId=a.ActivityId JOIN Bookings b ON b.BookingId=r.BookingId
+    JOIN Passengers p ON p.PassengerId=b.PassengerId JOIN Accounts ac ON ac.BookingId=b.BookingId
+    CROSS JOIN Policy pol LEFT JOIN CheckIns ci ON ci.RegistrationId=r.RegistrationId
+    WHERE a.CruiseId IN(${cs}) AND p.UserId=${u.UserId} AND pol.PolicyId=1${kind}`
   :`SELECT a.ActivityId,a.CruiseId,SUM(CASE WHEN r.Status='CONFIRMED' THEN 1 ELSE 0 END) AS Confirmed,SUM(CASE WHEN r.Status='WAITLIST' THEN 1 ELSE 0 END) AS Waitlist FROM Activities a LEFT JOIN Registrations r ON r.ActivityId=a.ActivityId WHERE a.CruiseId IN(${cs})${kind} GROUP BY a.ActivityId,a.CruiseId`;
  const historyQuery=itineraryAccess?`SELECT h.ChangeId,h.CruiseId,h.ChangeType,h.Subject,h.OldSchedule,h.NewSchedule,h.Reason,h.Staff,h.CreatedAt FROM (
   SELECT cc.ChangeId,cc.CruiseId,cc.ChangeType,CONCAT(N'Chuyến: ',cc.NewName) AS Subject,
@@ -54,7 +63,7 @@ async function state(u){
  ) h WHERE h.CruiseId IN(${cs}) ORDER BY h.CreatedAt DESC`:`SELECT CAST(NULL AS bigint) AS ChangeId,CAST(NULL AS int) AS CruiseId,CAST(NULL AS varchar(10)) AS ChangeType,CAST(NULL AS nvarchar(200)) AS Subject,CAST(NULL AS nvarchar(500)) AS OldSchedule,CAST(NULL AS nvarchar(500)) AS NewSchedule,CAST(NULL AS nvarchar(500)) AS Reason,CAST(NULL AS nvarchar(100)) AS Staff,CAST(NULL AS datetime2) AS CreatedAt WHERE 1=0`;
  const cols={cruises:`SELECT c.*,s.Name AS Ship FROM Cruises c JOIN Ships s ON s.ShipId=c.ShipId WHERE c.CruiseId IN(${cs})`,ships:'SELECT ShipId,Name,Capacity FROM Ships',ports:'SELECT PortId,Name FROM Ports',stops:`SELECT s.StopId,s.CruiseId,s.PortId,p.Name AS Port,s.Arrival,s.Departure FROM Stops s JOIN Ports p ON p.PortId=s.PortId WHERE s.CruiseId IN(${cs})`,activities:`SELECT a.*,COALESCE(z.Name,p.Name,N'—') AS Location FROM Activities a LEFT JOIN Zones z ON z.ZoneId=a.ZoneId LEFT JOIN Stops st ON st.StopId=a.StopId LEFT JOIN Ports p ON p.PortId=st.PortId WHERE a.CruiseId IN(${cs})${kind}`,registrations:registrationStats,notifications:`SELECT NotificationId,CruiseId,Message,CreatedAt FROM Notifications WHERE CruiseId IN(${cs})`,changes:historyQuery,services:'SELECT * FROM Services',packageServices:'SELECT PackageId,ServiceId FROM PackageServices',
   bookings:bookingQuery(u)+(guests?'':' AND 1=0'),accounts:`SELECT AccountId,BookingId,Status FROM Accounts WHERE BookingId IN(${bs})${money?'':' AND 1=0'}`,
-  transactions:`SELECT t.TransactionId,t.AccountId,t.Amount,t.Status,t.CreatedAt,COALESCE(s.Name,a.Name,N'Dịch vụ') AS Description FROM Transactions t JOIN Accounts ac ON ac.AccountId=t.AccountId LEFT JOIN Services s ON s.ServiceId=t.ServiceId LEFT JOIN Registrations r ON r.RegistrationId=t.RegistrationId LEFT JOIN Activities a ON a.ActivityId=r.ActivityId WHERE ac.BookingId IN(${bs})${money?'':' AND 1=0'}`};
+  transactions:`SELECT t.TransactionId,t.AccountId,t.Amount,t.Status,t.CreatedAt,t.RefundAmount,t.RefundedAt,COALESCE(s.Name,a.Name,N'Dịch vụ') AS Description FROM Transactions t JOIN Accounts ac ON ac.AccountId=t.AccountId LEFT JOIN Services s ON s.ServiceId=t.ServiceId LEFT JOIN Registrations r ON r.RegistrationId=t.RegistrationId LEFT JOIN Activities a ON a.ActivityId=r.ActivityId WHERE ac.BookingId IN(${bs})${money?'':' AND 1=0'}`};
  const out=await jsonQuery('SELECT '+Object.entries(cols).map(([k,sql])=>`JSON_QUERY((${sql} FOR JSON PATH)) AS [${k}]`).join(',')+' FOR JSON PATH,WITHOUT_ARRAY_WRAPPER');
  for(const k of Object.keys(cols))if(!Array.isArray(out[k]))out[k]=[];return out;
 }
@@ -101,6 +110,7 @@ const server=http.createServer(async(req,res)=>{
    }
    const cancelMatch=/^\/api\/registrations\/(\d+)\/cancel$/.exec(url.pathname);
    if(req.method==='POST'&&cancelMatch){
+    requireRoles(u,'PASSENGER');
     const registrationId=id(cancelMatch[1]),body=await requestJson(req),reason=text(body.reason,500).trim();
     await runProcedure(`EXEC dbo.usp_CancelRegistration @RegistrationId=${registrationId},@ActorId=${u.UserId},@Reason=${literal(reason)};`);
     const rows=await jsonQuery(`SELECT RegistrationId,Status,CancelledAt,CancelledBy,CancelReason,RefundAmount FROM dbo.Registrations WHERE RegistrationId=${registrationId} FOR JSON PATH`);

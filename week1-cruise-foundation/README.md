@@ -1,6 +1,6 @@
 # Aurora Cruise · mốc nền tảng và tổng quan
 
-Mốc hiện tại: đăng nhập/đăng xuất, mật khẩu băm scrypt, phiên 8 giờ, 8 vai trò, Tổng quan theo booking/chuyến, quản lý chuyến/lịch cảng, đăng ký hoạt động và phần đầu nghiệp vụ hủy đăng ký. SQL kiểm tra hạn hủy, trạng thái check-in, phần trăm hoàn phí và giữ giao dịch bằng trạng thái `REFUNDED`. Chưa có giao diện hủy đăng ký, kiểm tra trùng lịch, check-in, POS và cập nhật tài chính. Không phụ thuộc thư mục `cruise-sql` khi chạy.
+Mốc hiện tại: đăng nhập/đăng xuất, mật khẩu băm scrypt, phiên 8 giờ, 8 vai trò, Tổng quan theo booking/chuyến, quản lý chuyến/lịch cảng, đăng ký hoạt động và hủy đăng ký. Hành khách hủy ngay trên giao diện; SQL kiểm tra quyền sở hữu, hạn hủy, trạng thái check-in, tài khoản chưa chốt, phần trăm hoàn phí và giữ giao dịch bằng trạng thái `REFUNDED`. Chưa có kiểm tra trùng lịch, check-in, POS và cập nhật tài chính. Không phụ thuộc thư mục `cruise-sql` khi chạy.
 
 ## Chạy
 
@@ -32,7 +32,7 @@ Trong dữ liệu mẫu, gói Premium bao gồm hoạt động Đêm nhạc trê
 
 ## Mốc đã triển khai và phần tiếp theo
 
-Đã hoàn tất lát cắt Tổng quan theo yêu cầu: chọn booking/chuyến, thông tin hành trình, trạng thái và điểm dừng, hoạt động kèm sức chứa/đăng ký, chi phí và các giao dịch gần đây theo quyền, thông báo gần đây và lịch trải nghiệm tiếp theo. Cũng đã có đăng nhập/phân quyền, tạo/sửa chuyến, quản lý điểm dừng, đổi giờ cảng có kiểm tra xung đột tour, lưu lý do/lịch sử và tự tạo thông báo. Nghiệp vụ đăng ký đã kiểm tra quyền, đúng chuyến, trạng thái hoạt động, sức chứa, giá theo gói, danh sách chờ và tự chuyển khách khi có chỗ. Phần tiếp theo là hủy/hoàn phí, check-in, ghi nhận POS và đối soát tài chính.
+Đã hoàn tất lát cắt Tổng quan theo yêu cầu: chọn booking/chuyến, thông tin hành trình, trạng thái và điểm dừng, hoạt động kèm sức chứa/đăng ký, chi phí và các giao dịch gần đây theo quyền, thông báo gần đây và lịch trải nghiệm tiếp theo. Cũng đã có đăng nhập/phân quyền, tạo/sửa chuyến, quản lý điểm dừng, đổi giờ cảng có kiểm tra xung đột tour, lưu lý do/lịch sử và tự tạo thông báo. Nghiệp vụ đăng ký đã kiểm tra quyền, đúng chuyến, trạng thái hoạt động, sức chứa, giá theo gói, danh sách chờ và tự chuyển khách khi có chỗ. Nghiệp vụ hủy kiểm tra quyền, hạn hủy, check-in, trạng thái tài khoản, hoàn phí theo chính sách, giữ dấu vết giao dịch và hiển thị đầy đủ trên giao diện. Phần tiếp theo là check-in, ghi nhận POS và đối soát tài chính.
 
 ## SQL và kiểm tra
 

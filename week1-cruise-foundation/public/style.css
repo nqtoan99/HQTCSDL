@@ -310,6 +310,24 @@ p {
   color: var(--ink);
   font-size: 12px;
 }
+.danger {
+  background: #fff7f4;
+  border: 1px solid #e5b8aa;
+  color: #9b3f2b;
+}
+.registration-button,
+.cancellation-button {
+  display: block;
+  margin-top: 8px;
+}
+.cancellation-detail {
+  margin-top: 7px;
+  max-width: 290px;
+}
+.refund-note {
+  color: #2f725d;
+  font-weight: 600;
+}
 .tabs button.active {
   background: var(--ink);
   color: white;
