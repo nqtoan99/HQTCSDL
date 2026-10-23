@@ -17,7 +17,7 @@ const text=(v,max)=>{if(typeof v!=='string'||!v.trim()||v.length>max)fail(400,'D
 function dateOnly(v){const s=text(v,10).trim();if(!/^\d{4}-\d{2}-\d{2}$/.test(s))fail(400,'Ngày không hợp lệ.');const d=new Date(`${s}T00:00:00Z`);if(Number.isNaN(d.getTime())||d.toISOString().slice(0,10)!==s)fail(400,'Ngày không hợp lệ.');return s;}
 function dateTime(v){const s=text(v,19).trim(),m=/^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/.exec(s);if(!m)fail(400,'Giờ cảng không hợp lệ.');dateOnly(m[1]);if(Number(m[2])>23||Number(m[3])>59||Number(m[4]||0)>59)fail(400,'Giờ cảng không hợp lệ.');return `${m[1]}T${m[2]}:${m[3]}:${m[4]||'00'}`;}
 async function requestJson(req){let raw='';for await(const chunk of req){raw+=chunk;if(raw.length>20000)fail(413,'Yêu cầu quá lớn.');}let body;try{body=JSON.parse(raw||'{}');}catch{fail(400,'JSON không hợp lệ.');}if(!body||typeof body!=='object'||Array.isArray(body))fail(400,'Dữ liệu gửi lên không hợp lệ.');return body;}
-async function runItinerary(sql){try{await query(sql);}catch(e){const message=String(e.message||'');const match=/Msg \d+, Level 16,[\s\S]*?Line \d+\s*\r?\n([^\r\n]+)/.exec(message);if(match)fail(422,match[1].trim());throw e;}}
+async function runProcedure(sql){try{await query(sql);}catch(e){const message=String(e.message||'');const match=/Msg \d+, Level 16,[\s\S]*?Line \d+\s*\r?\n([^\r\n]+)/.exec(message);if(match)fail(422,match[1].trim());throw e;}}
 const sessionId=req=>new RegExp(`(?:^|;\\s*)${cookieName}=([a-f0-9]{64})(?:;|$)`).exec(req.headers.cookie||'')?.[1];
 function requireRoles(u,...allowed){if(!u.roles.includes('ADMIN')&&!allowed.some(r=>u.roles.includes(r)))fail(403,'Không có quyền truy cập chức năng này.');}
 async function getUser(req){
@@ -38,7 +38,7 @@ async function state(u){
  const itineraryAccess=u.roles.some(r=>['ITINERARY','ADMIN'].includes(r));
  const kind=u.roles.includes('ADMIN')?'':u.roles.includes('ACTIVITY')&&!u.roles.includes('SHORE')?" AND Kind='ONBOARD'":u.roles.includes('SHORE')&&!u.roles.includes('ACTIVITY')?" AND Kind='SHORE'":'';
  const registrationStats=guest
-  ?`SELECT a.ActivityId,a.CruiseId,r.BookingId,SUM(CASE WHEN r.Status='CONFIRMED' THEN 1 ELSE 0 END) AS Confirmed,SUM(CASE WHEN r.Status='WAITLIST' THEN 1 ELSE 0 END) AS Waitlist FROM Activities a JOIN Registrations r ON r.ActivityId=a.ActivityId JOIN Bookings b ON b.BookingId=r.BookingId JOIN Passengers p ON p.PassengerId=b.PassengerId WHERE a.CruiseId IN(${cs}) AND p.UserId=${u.UserId}${kind} GROUP BY a.ActivityId,a.CruiseId,r.BookingId`
+  ?`SELECT r.RegistrationId,a.ActivityId,a.CruiseId,r.BookingId,r.Status,r.PriceAtRegistration,r.CreatedAt,CASE WHEN r.Status='CONFIRMED' THEN 1 ELSE 0 END AS Confirmed,CASE WHEN r.Status='WAITLIST' THEN 1 ELSE 0 END AS Waitlist FROM Activities a JOIN Registrations r ON r.ActivityId=a.ActivityId JOIN Bookings b ON b.BookingId=r.BookingId JOIN Passengers p ON p.PassengerId=b.PassengerId WHERE a.CruiseId IN(${cs}) AND p.UserId=${u.UserId}${kind}`
   :`SELECT a.ActivityId,a.CruiseId,SUM(CASE WHEN r.Status='CONFIRMED' THEN 1 ELSE 0 END) AS Confirmed,SUM(CASE WHEN r.Status='WAITLIST' THEN 1 ELSE 0 END) AS Waitlist FROM Activities a LEFT JOIN Registrations r ON r.ActivityId=a.ActivityId WHERE a.CruiseId IN(${cs})${kind} GROUP BY a.ActivityId,a.CruiseId`;
  const historyQuery=itineraryAccess?`SELECT h.ChangeId,h.CruiseId,h.ChangeType,h.Subject,h.OldSchedule,h.NewSchedule,h.Reason,h.Staff,h.CreatedAt FROM (
   SELECT cc.ChangeId,cc.CruiseId,cc.ChangeType,CONCAT(N'Chuyến: ',cc.NewName) AS Subject,
@@ -52,7 +52,7 @@ async function state(u){
    ic.Reason,u.Name,ic.CreatedAt FROM dbo.ItineraryChanges ic JOIN dbo.Stops s ON s.StopId=ic.StopId JOIN dbo.Users u ON u.UserId=ic.StaffId
    LEFT JOIN dbo.Ports op ON op.PortId=ic.OldPortId LEFT JOIN dbo.Ports np ON np.PortId=ic.NewPortId LEFT JOIN dbo.Ports p ON p.PortId=s.PortId
  ) h WHERE h.CruiseId IN(${cs}) ORDER BY h.CreatedAt DESC`:`SELECT CAST(NULL AS bigint) AS ChangeId,CAST(NULL AS int) AS CruiseId,CAST(NULL AS varchar(10)) AS ChangeType,CAST(NULL AS nvarchar(200)) AS Subject,CAST(NULL AS nvarchar(500)) AS OldSchedule,CAST(NULL AS nvarchar(500)) AS NewSchedule,CAST(NULL AS nvarchar(500)) AS Reason,CAST(NULL AS nvarchar(100)) AS Staff,CAST(NULL AS datetime2) AS CreatedAt WHERE 1=0`;
- const cols={cruises:`SELECT c.*,s.Name AS Ship FROM Cruises c JOIN Ships s ON s.ShipId=c.ShipId WHERE c.CruiseId IN(${cs})`,ships:'SELECT ShipId,Name,Capacity FROM Ships',ports:'SELECT PortId,Name FROM Ports',stops:`SELECT s.StopId,s.CruiseId,s.PortId,p.Name AS Port,s.Arrival,s.Departure FROM Stops s JOIN Ports p ON p.PortId=s.PortId WHERE s.CruiseId IN(${cs})`,activities:`SELECT a.*,COALESCE(z.Name,p.Name,N'—') AS Location FROM Activities a LEFT JOIN Zones z ON z.ZoneId=a.ZoneId LEFT JOIN Stops st ON st.StopId=a.StopId LEFT JOIN Ports p ON p.PortId=st.PortId WHERE a.CruiseId IN(${cs})${kind}`,registrations:registrationStats,notifications:`SELECT NotificationId,CruiseId,Message,CreatedAt FROM Notifications WHERE CruiseId IN(${cs})`,changes:historyQuery,services:'SELECT * FROM Services',
+ const cols={cruises:`SELECT c.*,s.Name AS Ship FROM Cruises c JOIN Ships s ON s.ShipId=c.ShipId WHERE c.CruiseId IN(${cs})`,ships:'SELECT ShipId,Name,Capacity FROM Ships',ports:'SELECT PortId,Name FROM Ports',stops:`SELECT s.StopId,s.CruiseId,s.PortId,p.Name AS Port,s.Arrival,s.Departure FROM Stops s JOIN Ports p ON p.PortId=s.PortId WHERE s.CruiseId IN(${cs})`,activities:`SELECT a.*,COALESCE(z.Name,p.Name,N'—') AS Location FROM Activities a LEFT JOIN Zones z ON z.ZoneId=a.ZoneId LEFT JOIN Stops st ON st.StopId=a.StopId LEFT JOIN Ports p ON p.PortId=st.PortId WHERE a.CruiseId IN(${cs})${kind}`,registrations:registrationStats,notifications:`SELECT NotificationId,CruiseId,Message,CreatedAt FROM Notifications WHERE CruiseId IN(${cs})`,changes:historyQuery,services:'SELECT * FROM Services',packageServices:'SELECT PackageId,ServiceId FROM PackageServices',
   bookings:bookingQuery(u)+(guests?'':' AND 1=0'),accounts:`SELECT AccountId,BookingId,Status FROM Accounts WHERE BookingId IN(${bs})${money?'':' AND 1=0'}`,
   transactions:`SELECT t.TransactionId,t.AccountId,t.Amount,t.Status,t.CreatedAt,COALESCE(s.Name,a.Name,N'Dịch vụ') AS Description FROM Transactions t JOIN Accounts ac ON ac.AccountId=t.AccountId LEFT JOIN Services s ON s.ServiceId=t.ServiceId LEFT JOIN Registrations r ON r.RegistrationId=t.RegistrationId LEFT JOIN Activities a ON a.ActivityId=r.ActivityId WHERE ac.BookingId IN(${bs})${money?'':' AND 1=0'}`};
  const out=await jsonQuery('SELECT '+Object.entries(cols).map(([k,sql])=>`JSON_QUERY((${sql} FOR JSON PATH)) AS [${k}]`).join(',')+' FOR JSON PATH,WITHOUT_ARRAY_WRAPPER');
@@ -80,7 +80,7 @@ const server=http.createServer(async(req,res)=>{
    if(req.method==='POST'&&url.pathname==='/api/itinerary/cruises'){
     requireRoles(u,'ITINERARY');const b=await requestJson(req),cruiseId=maybeId(b.cruiseId),shipId=id(b.shipId),name=text(b.name,150).trim(),startDate=dateOnly(b.startDate),endDate=dateOnly(b.endDate),status=text(b.status,20).trim().toUpperCase(),reason=text(b.reason,500).trim();
     if(endDate<startDate)fail(400,'Ngày kết thúc phải bằng hoặc sau ngày bắt đầu.');
-    await runItinerary(`EXEC dbo.usp_SaveCruise @CruiseId=${cruiseId},@ShipId=${shipId},@Name=${literal(name)},@StartDate=${literal(startDate)},@EndDate=${literal(endDate)},@Status=${literal(status)},@Reason=${literal(reason)},@StaffId=${u.UserId};`);
+    await runProcedure(`EXEC dbo.usp_SaveCruise @CruiseId=${cruiseId},@ShipId=${shipId},@Name=${literal(name)},@StartDate=${literal(startDate)},@EndDate=${literal(endDate)},@Status=${literal(status)},@Reason=${literal(reason)},@StaffId=${u.UserId};`);
     return send(200,{ok:true});
    }
    if(req.method==='POST'&&url.pathname==='/api/itinerary/stops'){
@@ -89,7 +89,15 @@ const server=http.createServer(async(req,res)=>{
     const sql=stopId===0
      ?`EXEC dbo.usp_AddStop @CruiseId=${cruiseId},@PortId=${portId},@Arrival=${literal(arrival)},@Departure=${literal(departure)},@Reason=${literal(reason)},@StaffId=${u.UserId};`
      :`EXEC dbo.usp_ChangeStop @StopId=${stopId},@PortId=${portId},@Arrival=${literal(arrival)},@Departure=${literal(departure)},@Reason=${literal(reason)},@StaffId=${u.UserId};`;
-    await runItinerary(sql);return send(200,{ok:true});
+    await runProcedure(sql);return send(200,{ok:true});
+   }
+   if(req.method==='POST'&&url.pathname==='/api/registrations'){
+    requireRoles(u,'PASSENGER');const b=await requestJson(req),bookingId=id(b.bookingId),activityId=id(b.activityId);
+    const allowed=await jsonQuery(bookingQuery(u,bookingId)+' FOR JSON PATH');
+    if(!allowed.length)fail(403,'Không có quyền đăng ký cho booking này.');
+    await runProcedure(`EXEC dbo.usp_Register @BookingId=${bookingId},@ActivityId=${activityId},@ActorId=${u.UserId};`);
+    const rows=await jsonQuery(`SELECT RegistrationId,ActivityId,BookingId,Status,PriceAtRegistration,CreatedAt FROM dbo.Registrations WHERE BookingId=${bookingId} AND ActivityId=${activityId} FOR JSON PATH`);
+    return send(201,rows[0]);
    }
    if(req.method!=='GET')fail(405,'Phương thức không được hỗ trợ cho API này.');
    if(url.pathname==='/api/me')return send(200,u);

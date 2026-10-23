@@ -922,6 +922,19 @@ dialog .actions {
 .hint.error {
   color: #a13f35;
 }
+.hint.success {
+  color: var(--green);
+  font-weight: 600;
+}
+.registration-button {
+  display: block;
+  margin-top: 9px;
+}
+.price-note {
+  display: block;
+  color: var(--green);
+  font-weight: 600;
+}
 .login-layout .panel {
   margin: 0;
 }
