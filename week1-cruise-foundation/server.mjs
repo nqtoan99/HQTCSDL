@@ -105,10 +105,15 @@ const server=http.createServer(async(req,res)=>{
    if(req.method==='POST'&&url.pathname==='/api/pos/sync'){
     requireRoles(u,'POS');const b=await requestJson(req),clientId=text(b.clientId,36).trim(),code=text(b.code,100).trim(),serviceId=id(b.serviceId),quantity=whole(b.quantity,1,100,'Số lượng'),deviceId=id(b.deviceId);
     if(!/^[a-f\d]{8}(-[a-f\d]{4}){3}-[a-f\d]{12}$/i.test(clientId))fail(400,'UUID giao dịch không hợp lệ.');
-    await runProcedure(`EXEC dbo.usp_PostPOS @Code=${literal(code)},@ServiceId=${serviceId},@Quantity=${quantity},@DeviceId=${deviceId},@StaffId=${u.UserId},@ClientId=${literal(clientId)};`);
+    await runProcedure(`EXEC dbo.usp_SyncPOS @Code=${literal(code)},@ServiceId=${serviceId},@Quantity=${quantity},@DeviceId=${deviceId},@StaffId=${u.UserId},@ClientId=${literal(clientId)};`);
     const transaction=(await jsonQuery(`SELECT t.TransactionId,t.ClientId,t.AccountId,t.ServiceId,t.DeviceId,t.Quantity,t.Amount,t.Status,t.CreatedAt FROM dbo.Transactions t WHERE t.ClientId=CONVERT(uniqueidentifier,${literal(clientId)}) FOR JSON PATH`))[0];
     if(!transaction)throw Error('SQL Server chưa trả về giao dịch đã đồng bộ.');
-    return send(200,{ok:true,transaction});
+    const receipt=(await jsonQuery(`SELECT r.ReceiptId,r.ClientId,r.DeviceId,d.Name AS DeviceName,r.StaffId,r.SyncedAt,t.TransactionId,t.ServiceId,s.Name AS ServiceName,t.Quantity,t.Amount,t.Status FROM dbo.POSReceipts r JOIN dbo.Devices d ON d.DeviceId=r.DeviceId JOIN dbo.Transactions t ON t.ClientId=r.ClientId JOIN dbo.Services s ON s.ServiceId=t.ServiceId WHERE r.ClientId=CONVERT(uniqueidentifier,${literal(clientId)}) AND r.StaffId=${u.UserId} FOR JSON PATH`))[0];
+    if(!receipt)throw Error('SQL Server chưa trả về biên nhận đã lưu.');
+    return send(200,{ok:true,transaction,receipt});
+   }
+   if(req.method==='GET'&&url.pathname==='/api/pos/receipts'){
+    requireRoles(u,'POS');return send(200,await jsonQuery(`SELECT TOP(50) r.ReceiptId,r.ClientId,r.DeviceId,d.Name AS DeviceName,r.StaffId,r.SyncedAt,t.TransactionId,t.ServiceId,s.Name AS ServiceName,t.Quantity,t.Amount,t.Status FROM dbo.POSReceipts r JOIN dbo.Devices d ON d.DeviceId=r.DeviceId JOIN dbo.Transactions t ON t.ClientId=r.ClientId JOIN dbo.Services s ON s.ServiceId=t.ServiceId WHERE r.StaffId=${u.UserId} ORDER BY r.SyncedAt DESC FOR JSON PATH`));
    }
    if(req.method==='POST'&&url.pathname==='/api/registrations'){
     requireRoles(u,'PASSENGER');const b=await requestJson(req),bookingId=id(b.bookingId),activityId=id(b.activityId);
