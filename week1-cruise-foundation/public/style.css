@@ -1134,6 +1134,44 @@ code {
 .pos-status span { color: var(--muted, #66756f); }
 .pos-grid .panel { min-width: 0; }
 .pos-grid code { font-size: 11px; }
+.finance-panel section { margin: 20px 0; }
+.finance-summary { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 16px; margin: 18px 0 26px; }
+.finance-accounts { display: grid; grid-template-columns: repeat(auto-fit,minmax(280px,1fr)); gap: 16px; }
+.finance-account h3, .invoice-card h3 { margin: 4px 0; }
+.finance-account-totals { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 12px; margin: 18px 0 10px; }
+.finance-account-totals div { display: grid; gap: 5px; }
+.finance-account-totals small { color: var(--muted,#66756f); }
+.finance-account-totals strong { font-size: 17px; }
+.invoice-status, .invoice-total { border-top: 1px solid var(--line,#d8dfd9); padding-top: 12px; }
+.finance-transactions code { font-size: 11px; }
+.finance-dispute-button { margin-top: 8px; padding: 7px 10px; }
+.dispute-chip { margin: 4px 0 10px; }
+.invoice-list { display: grid; gap: 16px; }
+.invoice-card { padding: 24px; border: 1px solid var(--line,#d8dfd9); border-radius: 12px; background: #fff; break-inside: avoid; }
+.invoice-heading, .invoice-total { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.invoice-heading p { color: var(--muted,#66756f); }
+.invoice-total { margin-top: 14px; }
+.invoice-total strong { font-size: 22px; }
+@media (max-width: 760px) {
+  .finance-summary { grid-template-columns: 1fr; }
+  .finance-account-totals { grid-template-columns: 1fr; }
+  .invoice-heading { align-items: flex-start; flex-direction: column; }
+}
+@media print {
+  body:has(#finance-panel:not([hidden])) .sidebar,
+  body:has(#finance-panel:not([hidden])) main > header,
+  body:has(#finance-panel:not([hidden])) main > .page-title,
+  body:has(#finance-panel:not([hidden])) main > footer,
+  body:has(#finance-panel:not([hidden])) #workspace-error,
+  body:has(#finance-panel:not([hidden])) #workspace-success,
+  body:has(#finance-panel:not([hidden])) .finance-summary,
+  body:has(#finance-panel:not([hidden])) .finance-accounts,
+  body:has(#finance-panel:not([hidden])) .finance-transactions,
+  body:has(#finance-panel:not([hidden])) .no-print,
+  body:has(#finance-panel:not([hidden])) .invoice-list + .hint { display: none !important; }
+  body:has(#finance-panel:not([hidden])) main { padding: 0; }
+  body:has(#finance-panel:not([hidden])) .invoice-card { border: 0; padding: 0; }
+}
 @media (max-width: 900px) {
   .pos-grid { grid-template-columns: 1fr; }
   .pos-status { align-items: flex-start; flex-direction: column; gap: 4px; }
