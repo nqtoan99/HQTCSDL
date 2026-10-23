@@ -1,6 +1,6 @@
 # Aurora Cruise · mốc nền tảng và tổng quan
 
-Mốc hiện tại: đăng nhập/đăng xuất, mật khẩu băm scrypt, phiên 8 giờ, 8 vai trò, Tổng quan theo booking/chuyến, quản lý chuyến/lịch cảng, đăng ký hoạt động, hủy đăng ký và phần đầu quản trị người dùng. API quản trị có thể tạo/sửa/khóa tài khoản, đổi mật khẩu và cấp nhiều vai trò; SQL bảo vệ tài khoản quản trị đang thao tác và quản trị viên hoạt động cuối cùng. Chưa có giao diện quản trị đầy đủ, kiểm tra trùng lịch, check-in, POS và cập nhật tài chính. Không phụ thuộc thư mục `cruise-sql` khi chạy.
+Mốc hiện tại: đăng nhập/đăng xuất, mật khẩu băm scrypt, phiên 8 giờ, 8 vai trò, Tổng quan theo booking/chuyến, quản lý chuyến/lịch cảng, đăng ký, hủy và quản trị hệ thống. Màn hình quản trị cho phép tạo/sửa/khóa tài khoản, đổi mật khẩu và nhiều vai trò; quản lý danh mục; gán booking; cấu hình dịch vụ trong gói; sửa chính sách hủy/hoàn; kích hoạt hoặc vô hiệu mã định danh. SQL kiểm tra lại quyền và quy tắc dữ liệu cho mọi thao tác. Chưa có kiểm tra trùng lịch, check-in, POS và cập nhật tài chính. Không phụ thuộc thư mục `cruise-sql` khi chạy.
 
 ## Chạy
 
@@ -32,7 +32,7 @@ Trong dữ liệu mẫu, gói Premium bao gồm hoạt động Đêm nhạc trê
 
 ## Mốc đã triển khai và phần tiếp theo
 
-Đã hoàn tất lát cắt Tổng quan theo yêu cầu: chọn booking/chuyến, thông tin hành trình, trạng thái và điểm dừng, hoạt động kèm sức chứa/đăng ký, chi phí và các giao dịch gần đây theo quyền, thông báo gần đây và lịch trải nghiệm tiếp theo. Cũng đã có đăng nhập/phân quyền, tạo/sửa chuyến, quản lý điểm dừng, đổi giờ cảng có kiểm tra xung đột tour, lưu lý do/lịch sử và tự tạo thông báo. Nghiệp vụ đăng ký đã kiểm tra quyền, đúng chuyến, trạng thái hoạt động, sức chứa, giá theo gói, danh sách chờ và tự chuyển khách khi có chỗ. Nghiệp vụ hủy kiểm tra quyền, hạn hủy, check-in, trạng thái tài khoản, hoàn phí theo chính sách, giữ dấu vết giao dịch và hiển thị đầy đủ trên giao diện. Phần tiếp theo là check-in, ghi nhận POS và đối soát tài chính.
+Đã hoàn tất lát cắt Tổng quan theo yêu cầu: chọn booking/chuyến, thông tin hành trình, trạng thái và điểm dừng, hoạt động kèm sức chứa/đăng ký, chi phí và các giao dịch gần đây theo quyền, thông báo gần đây và lịch trải nghiệm tiếp theo. Cũng đã có đăng nhập/phân quyền, tạo/sửa chuyến, quản lý điểm dừng, đổi giờ cảng có kiểm tra xung đột tour, lưu lý do/lịch sử và tự tạo thông báo. Nghiệp vụ đăng ký đã kiểm tra quyền, đúng chuyến, trạng thái hoạt động, sức chứa, giá theo gói, danh sách chờ và tự chuyển khách khi có chỗ. Nghiệp vụ hủy kiểm tra quyền, hạn hủy, check-in, trạng thái tài khoản, hoàn phí theo chính sách và giữ dấu vết giao dịch. Quản trị hệ thống đã có giao diện và API đầy đủ cho người dùng, vai trò, danh mục, booking, gói dịch vụ, chính sách và mã định danh. Phần tiếp theo là toàn vẹn dữ liệu, check-in, ghi nhận POS và đối soát tài chính.
 
 ## SQL và kiểm tra
 
@@ -44,4 +44,4 @@ Chạy npm run check và npm run test:auth. Test dùng SQL Server thật, cổng
 
 Push server.mjs, src, public, scripts, tests, database, docs, README.md, CHAY-WEB.cmd, package.json, package-lock.json và .gitignore. Không push .tmp, node_modules, .env hoặc log.
 
-Các API hiện có: POST /api/login, POST /api/logout, POST /api/itinerary/cruises, POST /api/itinerary/stops, POST /api/registrations, POST /api/registrations/:id/cancel, GET /api/me, GET /api/state, GET /api/bookings/:id, GET /api/departments/:role, GET /api/admin/users. Backend và SQL đều kiểm tra quyền sở hữu booking khi đăng ký hoặc hủy. Cookie HttpOnly và SameSite=Strict; restart server cần đăng nhập lại. Bản học phần chạy localhost.
+Các API chính: đăng nhập/đăng xuất, lịch trình, đăng ký/hủy và nhóm `/api/admin/*` cho dữ liệu quản trị, người dùng, danh mục, booking, gói dịch vụ, chính sách và mã định danh. Backend và SQL đều kiểm tra quyền; dữ liệu hành khách tiếp tục bị giới hạn theo chủ booking. Cookie HttpOnly và SameSite=Strict; restart server cần đăng nhập lại. Bản học phần chạy localhost.
