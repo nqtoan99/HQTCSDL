@@ -30,6 +30,7 @@ await run('05-itinerary.sql');
 await run('06-registration.sql');
 await run('07-cancellation.sql');
 await run('08-admin.sql');
+await run('09-integrity.sql');
 const pending=await jsonQuery("SELECT UserId FROM Users WHERE PasswordHash IS NULL AND Email LIKE '%@demo.local' FOR JSON PATH");
 if(pending.length)await query(pending.map(u=>`UPDATE Users SET PasswordHash=${literal(hashPassword('Aurora123!'))} WHERE UserId=${u.UserId} AND PasswordHash IS NULL;`).join('\n'));
 console.log(`Database ${database} sẵn sàng. Mật khẩu demo: Aurora123!`);
