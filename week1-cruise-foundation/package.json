@@ -11,6 +11,7 @@
     "start": "node server.mjs",
     "check": "node --check server.mjs && node --check src/db.mjs && node --check public/app.js && node --check public/sw.js && node --check scripts/setup.mjs",
     "test:auth": "node tests/auth.mjs",
-    "test:integrity": "node tests/integrity.mjs"
+    "test:integrity": "node tests/integrity.mjs",
+    "test:pos": "node tests/pos-sync.mjs"
   }
 }

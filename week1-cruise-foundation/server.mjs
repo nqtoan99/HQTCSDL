@@ -102,6 +102,14 @@ const server=http.createServer(async(req,res)=>{
      :`EXEC dbo.usp_ChangeStop @StopId=${stopId},@PortId=${portId},@Arrival=${literal(arrival)},@Departure=${literal(departure)},@Reason=${literal(reason)},@StaffId=${u.UserId};`;
     await runProcedure(sql);return send(200,{ok:true});
    }
+   if(req.method==='POST'&&url.pathname==='/api/pos/sync'){
+    requireRoles(u,'POS');const b=await requestJson(req),clientId=text(b.clientId,36).trim(),code=text(b.code,100).trim(),serviceId=id(b.serviceId),quantity=whole(b.quantity,1,100,'Số lượng'),deviceId=id(b.deviceId);
+    if(!/^[a-f\d]{8}(-[a-f\d]{4}){3}-[a-f\d]{12}$/i.test(clientId))fail(400,'UUID giao dịch không hợp lệ.');
+    await runProcedure(`EXEC dbo.usp_PostPOS @Code=${literal(code)},@ServiceId=${serviceId},@Quantity=${quantity},@DeviceId=${deviceId},@StaffId=${u.UserId},@ClientId=${literal(clientId)};`);
+    const transaction=(await jsonQuery(`SELECT t.TransactionId,t.ClientId,t.AccountId,t.ServiceId,t.DeviceId,t.Quantity,t.Amount,t.Status,t.CreatedAt FROM dbo.Transactions t WHERE t.ClientId=CONVERT(uniqueidentifier,${literal(clientId)}) FOR JSON PATH`))[0];
+    if(!transaction)throw Error('SQL Server chưa trả về giao dịch đã đồng bộ.');
+    return send(200,{ok:true,transaction});
+   }
    if(req.method==='POST'&&url.pathname==='/api/registrations'){
     requireRoles(u,'PASSENGER');const b=await requestJson(req),bookingId=id(b.bookingId),activityId=id(b.activityId);
     const allowed=await jsonQuery(bookingQuery(u,bookingId)+' FOR JSON PATH');
