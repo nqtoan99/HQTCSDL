@@ -328,6 +328,31 @@ p {
   color: #2f725d;
   font-weight: 600;
 }
+.activity-toolbar {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.6fr) minmax(180px, 1fr) minmax(160px, .8fr) auto;
+  gap: 14px;
+  align-items: end;
+  margin: 24px 0 18px;
+  padding: 18px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.activity-toolbar label { margin: 0; }
+.activity-toolbar button { min-height: 40px; white-space: nowrap; }
+.activity-table { margin-bottom: 24px; }
+.activity-table td { vertical-align: middle; }
+.activity-table .actions { gap: 6px; flex-wrap: nowrap; }
+.activity-table .actions button { padding: 8px 10px; }
+#activity-dialog { width: min(620px, calc(100vw - 32px)); }
+#activity-dialog form > p:first-child { margin-top: 0; }
+@media (max-width: 760px) {
+  .activity-toolbar { grid-template-columns: 1fr 1fr; }
+  .activity-toolbar label:first-child { grid-column: 1 / -1; }
+  .activity-table .table-wrap { overflow-x: auto; }
+  .activity-table table { min-width: 840px; }
+}
 .admin-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;

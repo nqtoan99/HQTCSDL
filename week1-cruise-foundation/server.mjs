@@ -19,7 +19,7 @@ const text=(v,max)=>{if(typeof v!=='string'||!v.trim()||v.length>max)fail(400,'D
 function dateOnly(v){const s=text(v,10).trim();if(!/^\d{4}-\d{2}-\d{2}$/.test(s))fail(400,'Ngày không hợp lệ.');const d=new Date(`${s}T00:00:00Z`);if(Number.isNaN(d.getTime())||d.toISOString().slice(0,10)!==s)fail(400,'Ngày không hợp lệ.');return s;}
 function dateTime(v){const s=text(v,19).trim(),m=/^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/.exec(s);if(!m)fail(400,'Giờ cảng không hợp lệ.');dateOnly(m[1]);if(Number(m[2])>23||Number(m[3])>59||Number(m[4]||0)>59)fail(400,'Giờ cảng không hợp lệ.');return `${m[1]}T${m[2]}:${m[3]}:${m[4]||'00'}`;}
 async function requestJson(req){let raw='';for await(const chunk of req){raw+=chunk;if(raw.length>20000)fail(413,'Yêu cầu quá lớn.');}let body;try{body=JSON.parse(raw||'{}');}catch{fail(400,'JSON không hợp lệ.');}if(!body||typeof body!=='object'||Array.isArray(body))fail(400,'Dữ liệu gửi lên không hợp lệ.');return body;}
-async function runProcedure(sql){try{await query(sql);}catch(e){const message=String(e.message||'');const match=/Msg \d+, Level 16,[\s\S]*?Line \d+\s*\r?\n([^\r\n]+)/.exec(message);if(match)fail(422,match[1].trim());throw e;}}
+async function runProcedure(sql){try{return await query(sql);}catch(e){const message=String(e.message||'');const match=/Msg \d+, Level 16,[\s\S]*?Line \d+\s*\r?\n([^\r\n]+)/.exec(message);if(match)fail(422,match[1].trim());throw e;}}
 const sessionId=req=>new RegExp(`(?:^|;\\s*)${cookieName}=([a-f0-9]{64})(?:;|$)`).exec(req.headers.cookie||'')?.[1];
 function requireRoles(u,...allowed){if(!u.roles.includes('ADMIN')&&!allowed.some(r=>u.roles.includes(r)))fail(403,'Không có quyền truy cập chức năng này.');}
 async function getUser(req){
@@ -150,6 +150,20 @@ const server=http.createServer(async(req,res)=>{
    if(req.method==='GET'&&url.pathname==='/api/pos/receipts'){
     requireRoles(u,'POS');return send(200,await jsonQuery(`SELECT TOP(50) r.ReceiptId,r.ClientId,r.DeviceId,d.Name AS DeviceName,r.StaffId,r.SyncedAt,t.TransactionId,t.ServiceId,s.Name AS ServiceName,t.Quantity,t.Amount,t.Status FROM dbo.POSReceipts r JOIN dbo.Devices d ON d.DeviceId=r.DeviceId JOIN dbo.Transactions t ON t.ClientId=r.ClientId JOIN dbo.Services s ON s.ServiceId=t.ServiceId WHERE r.StaffId=${u.UserId} ORDER BY r.SyncedAt DESC FOR JSON PATH`));
    }
+   if(req.method==='POST'&&url.pathname==='/api/activity/activities'){
+    requireRoles(u,'ACTIVITY');const b=await requestJson(req),activityId=maybeId(b.activityId),cruiseId=id(b.cruiseId),zoneId=id(b.zoneId),name=text(b.name,150).trim(),startsAt=dateTime(b.startsAt),endsAt=dateTime(b.endsAt),capacity=whole(b.capacity,1,100000,'Sức chứa'),fee=amount(b.fee,'Phí tham gia'),status=text(b.status||'OPEN',20).trim().toUpperCase();
+    if(endsAt<=startsAt)fail(400,'Thời gian kết thúc phải sau thời gian bắt đầu.');
+    if(!['OPEN','DELAYED','COMPLETED'].includes(status))fail(400,'Trạng thái hoạt động không hợp lệ.');
+    await runProcedure(`EXEC dbo.usp_SaveOnboardActivity @ActorId=${u.UserId},@ActivityId=${activityId},@CruiseId=${cruiseId},@ZoneId=${zoneId},@Name=${literal(name)},@StartsAt=${literal(startsAt)},@EndsAt=${literal(endsAt)},@Capacity=${capacity},@Fee=${fee},@Status=${literal(status)};`);
+    return send(activityId===0?201:200,{ok:true});
+   }
+   const cancelActivityMatch=/^\/api\/activity\/activities\/(\d+)\/cancel$/.exec(url.pathname);
+   if(req.method==='POST'&&cancelActivityMatch){
+    requireRoles(u,'ACTIVITY');const activityId=id(cancelActivityMatch[1]),b=await requestJson(req),reason=text(b.reason,500).trim();
+    if(reason.length<3)fail(400,'Lý do hủy phải có từ 3 đến 500 ký tự.');
+    const result=JSON.parse(await runProcedure(`EXEC dbo.usp_CancelOnboardActivity @ActorId=${u.UserId},@ActivityId=${activityId},@Reason=${literal(reason)};`));
+    return send(200,{ok:true,...result});
+   }
    if(req.method==='POST'&&url.pathname==='/api/registrations'){
     requireRoles(u,'PASSENGER');const b=await requestJson(req),bookingId=id(b.bookingId),activityId=id(b.activityId);
     const allowed=await jsonQuery(bookingQuery(u,bookingId)+' FOR JSON PATH');
@@ -210,6 +224,19 @@ const server=http.createServer(async(req,res)=>{
     return send(200,finance);
    }
    if(url.pathname==='/api/state')return send(200,await state(u));
+   if(req.method==='GET'&&url.pathname==='/api/activity/data'){
+    requireRoles(u,'ACTIVITY');const data=(await jsonQuery(`SELECT
+     JSON_QUERY((SELECT CruiseId,ShipId,Name,StartDate,EndDate,Status FROM dbo.Cruises ORDER BY StartDate,CruiseId FOR JSON PATH)) AS cruises,
+     JSON_QUERY((SELECT z.ZoneId,z.ShipId,z.Name AS ZoneName,s.Name AS ShipName FROM dbo.Zones z JOIN dbo.Ships s ON s.ShipId=z.ShipId ORDER BY s.Name,z.Name FOR JSON PATH)) AS zones,
+     JSON_QUERY((SELECT a.ActivityId,a.CruiseId,c.Name AS Cruise,a.ZoneId,z.Name AS Location,a.Name,a.StartsAt,a.EndsAt,a.Capacity,a.Fee,a.Status,
+      (SELECT COUNT(*) FROM dbo.Registrations r WHERE r.ActivityId=a.ActivityId AND r.Status='CONFIRMED') AS Confirmed,
+      (SELECT COUNT(*) FROM dbo.Registrations r WHERE r.ActivityId=a.ActivityId AND r.Status='WAITLIST') AS Waitlist,
+      (SELECT COUNT(*) FROM dbo.Registrations r WHERE r.ActivityId=a.ActivityId AND r.Status='CANCELLED') AS Cancelled
+      FROM dbo.Activities a JOIN dbo.Cruises c ON c.CruiseId=a.CruiseId LEFT JOIN dbo.Zones z ON z.ZoneId=a.ZoneId WHERE a.Kind='ONBOARD' ORDER BY a.StartsAt,a.ActivityId FOR JSON PATH)) AS activities,
+     JSON_QUERY((SELECT CancelHours,RefundPercent FROM dbo.Policy WHERE PolicyId=1 FOR JSON PATH)) AS policy
+     FOR JSON PATH,WITHOUT_ARRAY_WRAPPER`))[0]||{};
+    for(const key of ['cruises','zones','activities','policy'])if(!Array.isArray(data[key]))data[key]=[];return send(200,data);
+   }
    if(url.pathname==='/api/admin/data'){
     requireRoles(u,'ADMIN');return send(200,await jsonQuery(`SELECT
      JSON_QUERY((SELECT u.UserId,u.Name,u.Email,u.Active,JSON_QUERY((SELECT r.Code FROM UserRoles ur JOIN Roles r ON r.RoleId=ur.RoleId WHERE ur.UserId=u.UserId FOR JSON PATH)) AS roles FROM Users u ORDER BY u.UserId FOR JSON PATH)) AS users,

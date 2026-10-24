@@ -32,11 +32,15 @@ Trong dữ liệu mẫu, gói Premium bao gồm hoạt động Đêm nhạc trê
 
 ## Mốc đã triển khai và phần tiếp theo
 
-Đã hoàn tất lát cắt Tổng quan, đăng nhập/phân quyền, lịch trình, đăng ký/danh sách chờ, hủy/hoàn phí, quản trị hệ thống và chi phí hành khách. Hành khách xem tài khoản theo booking, số dư tạm tính, giao dịch, hoàn phí, hóa đơn/thanh toán và gửi tranh chấp; API và stored procedure cùng xác minh quyền sở hữu. Tranh chấp đang mở chặn chốt tài khoản. Toàn vẹn dữ liệu chặn cabin hoặc hoạt động sai chuyến, giao dịch sai account, chứng từ sai tổng; chốt account tạo Invoice, Payment và trạng thái SETTLED trong cùng transaction, đồng thời chặn sửa tài chính sau chốt. POS đồng bộ từng giao dịch lên SQL Server qua API, xác nhận giá tại database, dùng UUID duy nhất để retry an toàn và lưu biên nhận đồng bộ trong cùng transaction.
+Đã hoàn tất lát cắt Tổng quan, đăng nhập/phân quyền, lịch trình, quản lý hoạt động trên tàu, đăng ký/danh sách chờ, hủy/hoàn phí, quản trị hệ thống và chi phí hành khách. Hành khách xem tài khoản theo booking, số dư tạm tính, giao dịch, hoàn phí, hóa đơn/thanh toán và gửi tranh chấp; API và stored procedure cùng xác minh quyền sở hữu. Tranh chấp đang mở chặn chốt tài khoản. Toàn vẹn dữ liệu chặn cabin hoặc hoạt động sai chuyến, giao dịch sai account, chứng từ sai tổng; chốt account tạo Invoice, Payment và trạng thái SETTLED trong cùng transaction, đồng thời chặn sửa tài chính sau chốt. POS đồng bộ từng giao dịch lên SQL Server qua API, xác nhận giá tại database, dùng UUID duy nhất để retry an toàn và lưu biên nhận đồng bộ trong cùng transaction.
+
+## Hoạt động trên tàu
+
+Vai trò Quản lý hoạt động có thể tạo, sửa, tìm kiếm và lọc hoạt động theo chuyến hoặc trạng thái; cấu hình thời gian, khu vực, sức chứa và phí. Hủy hoạt động chưa bắt đầu sẽ hủy các đăng ký còn hiệu lực, hoàn theo chính sách hiện hành, ghi lý do và audit. Không thể giảm sức chứa thấp hơn số lượt đã xác nhận hoặc hủy sau khi đã check-in.
 
 ## SQL và kiểm tra
 
-Setup chạy 01-schema → 03-seed → 04-auth → 05-itinerary → 06-registration → 07-cancellation → 08-admin → 09-integrity → 10-pos-sync → 11-pos-receipts → 12-passenger-finance trên DB mới. Với DB CruiseWeek1 hiện có, setup giữ dữ liệu rồi chạy các migration để cập nhật nghiệp vụ. Seed không gọi usp_Register. Nếu dùng SSMS bật SQLCMD Mode. Sau khi chạy SQL bằng tay, chạy setup để cấp hash demo và cập nhật migration.
+Setup chạy 01-schema → 03-seed → 04-auth → 05-itinerary → 06-registration → 07-cancellation → 08-admin → 09-integrity → 10-pos-sync → 11-pos-receipts → 12-passenger-finance → 13-onboard-activities trên DB mới. Với DB CruiseWeek1 hiện có, setup giữ dữ liệu rồi chạy các migration để cập nhật nghiệp vụ. Seed không gọi usp_Register. Nếu dùng SSMS bật SQLCMD Mode. Sau khi chạy SQL bằng tay, chạy setup để cấp hash demo và cập nhật migration.
 
 Chạy `npm run check`, `npm run test:auth`, `npm run test:integrity`, `npm run test:pos` và `npm run test:finance`. Test nghiệp vụ tự tạo database riêng rồi xóa sau khi chạy. Hướng dẫn: `docs/POS-OFFLINE.md`, `docs/PASSENGER-FINANCE.md`; chi tiết API/quyền: `docs/AUTH.md`.
 

@@ -1,4 +1,4 @@
-const CACHE = 'aurora-week1-shell-v1';
+const CACHE = 'aurora-week1-shell-v2';
 const APP_SHELL = ['/', '/index.html', '/style.css', '/app.js', '/manifest.webmanifest'];
 
 self.addEventListener('install', event => {
