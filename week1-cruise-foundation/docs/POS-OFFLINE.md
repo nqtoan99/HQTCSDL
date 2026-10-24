@@ -20,7 +20,7 @@ Chạy `npm run test:pos` để kiểm tra API và SQL trên database ngẫu nhi
 
 ## Giá và dịch vụ trong gói
 
-Quote trực tuyến hiển thị hành khách, booking, gói, toàn bộ dịch vụ gói bao gồm, tổng phí đã ghi trong account, giá từng đơn vị, số lượng và tổng dự kiến. Nhấn **Làm mới báo giá** để lấy lại dữ liệu gói/giá mới nhất từ SQL Server; nút này tắt khi ngoại tuyến. Dịch vụ có trong `PackageServices` được đánh dấu không thu thêm và có đơn giá tính tiền 0; giá niêm yết vẫn hiển thị để đối chiếu. Biên nhận sau đồng bộ hiển thị booking, gói, nhân viên, thiết bị và số tiền SQL đã ghi thực tế; không dùng giá từ trình duyệt để tính khoản phải thu.
+Quote trực tuyến hiển thị hành khách, booking, gói, toàn bộ dịch vụ gói bao gồm, tổng phí đã ghi trong account, giá từng đơn vị, số lượng và tổng dự kiến. Nhấn **Làm mới báo giá** để lấy lại dữ liệu gói/giá mới nhất từ SQL Server; nút này tắt khi ngoại tuyến. Dịch vụ có trong `PackageServices` được đánh dấu không thu thêm và có đơn giá tính tiền 0; giá niêm yết vẫn hiển thị để đối chiếu. Biên nhận sau đồng bộ hiển thị booking, gói, nhân viên, thiết bị, số tiền giao dịch và tổng phí account sau khi ghi; không dùng giá từ trình duyệt để tính khoản phải thu.
 
 ## Giới hạn
 
