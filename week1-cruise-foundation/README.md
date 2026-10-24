@@ -1,17 +1,17 @@
 # Aurora Cruise · mốc nền tảng và tổng quan
 
-Mốc hiện tại: đăng nhập/đăng xuất, mật khẩu băm scrypt, phiên 8 giờ, 8 vai trò, Tổng quan theo booking/chuyến, quản lý chuyến/lịch cảng, đăng ký, hủy, quản trị hệ thống và toàn vẹn dữ liệu. SQL kiểm tra quyền, quan hệ chéo bảng, bảo vệ tài khoản đã chốt, đối chiếu hóa đơn/thanh toán và ghi audit có actor, chi tiết, mã liên kết. POS ngoại tuyến có giao diện/cache, hàng đợi localStorage theo tài khoản, UUID cố định, đồng bộ idempotent và biên nhận SQL. Hành khách xem chi phí tạm, giao dịch, khoản hoàn, hóa đơn và gửi tranh chấp trong phạm vi booking của mình. Không phụ thuộc thư mục `cruise-sql` khi chạy.
+Mốc hiện tại: đăng nhập/đăng xuất, mật khẩu băm scrypt, phiên 8 giờ, 8 vai trò, Tổng quan theo booking/chuyến, quản lý chuyến/lịch cảng, đăng ký, hủy, quản trị hệ thống, POS, chi phí hành khách và check-in. QR hành khách được cấp từ mã định danh đang hoạt động; API chỉ trả QR trong phạm vi booking của chủ tài khoản. Check-in kiểm tra mã, booking, trạng thái đăng ký, vai trò và thiết bị ở cả API lẫn SQL; mỗi đăng ký chỉ có một lượt check-in, lưu thời gian/nhân viên/thiết bị, và tour bờ có thể ghi nhận khách đã về tàu. POS tra booking, gói, dịch vụ bao gồm và giá qua SQL; bán trực tuyến ghi ngay vào account, offline giữ hàng đợi rồi đồng bộ theo UUID. Không phụ thuộc thư mục `cruise-sql` khi chạy.
 
 ## Chạy
 
-Cần Node.js từ 18, SQL Server và sqlcmd trong PATH. Mở terminal ở thư mục này:
+Cần Node.js từ 18, SQL Server và sqlcmd trong PATH. Cài dependency QR bằng `npm ci`, rồi mở terminal ở thư mục này:
 
 ```powershell
 npm run setup
 npm start
 ```
 
-Mở http://localhost:3001 hoặc nhấp đúp CHAY-WEB.cmd. Database riêng CruiseWeek1; không dùng CruiseCoursework của bản đầy đủ. Nếu dùng SQLEXPRESS, đặt $env:SQL_SERVER = '.\SQLEXPRESS' trước setup/start. Có thể đổi SQL_DATABASE và PORT; giữ cùng cấu hình khi setup/server/test. Không có dependency bên ngoài hoặc bước build.
+Mở http://localhost:3001 hoặc nhấp đúp CHAY-WEB.cmd. Database riêng CruiseWeek1; không dùng CruiseCoursework của bản đầy đủ. Nếu dùng SQLEXPRESS, đặt $env:SQL_SERVER = '.\SQLEXPRESS' trước setup/start. Có thể đổi SQL_DATABASE và PORT; giữ cùng cấu hình khi setup/server/test. Dependency duy nhất là thư viện `qrcode` để tạo ảnh QR tại máy chủ; không cần bước build.
 
 ## Tài khoản
 
@@ -38,9 +38,17 @@ Trong dữ liệu mẫu, gói Premium bao gồm hoạt động Đêm nhạc trê
 
 Vai trò Quản lý hoạt động có thể tạo, sửa, tìm kiếm và lọc hoạt động theo chuyến hoặc trạng thái; cấu hình thời gian, khu vực, sức chứa và phí. Hủy hoạt động chưa bắt đầu sẽ hủy các đăng ký còn hiệu lực, hoàn theo chính sách hiện hành, ghi lý do và audit. Không thể giảm sức chứa thấp hơn số lượt đã xác nhận hoặc hủy sau khi đã check-in.
 
+## Thẻ hành khách và check-in
+
+Hành khách mở mục **Thẻ hành khách** để xem mã QR và mã định danh của booking đang chọn. Nhân viên hoạt động hoặc tour bờ chọn chuyến, hoạt động, thiết bị check-in rồi quét QR hoặc nhập mã; SQL xác minh mã đang hoạt động và đăng ký đã xác nhận. Với tour bờ, nhân viên có thể ghi nhận khách đã về tàu sau khi check-in. Migration nằm trong `database/14-checkin.sql` và được setup tự chạy.
+
+## POS và tài khoản chi tiêu
+
+Nhân viên POS nhập mã khách, chọn dịch vụ và số lượng. Khi trực tuyến, `/api/pos/quote` tra booking, gói, giá niêm yết, dịch vụ đã gồm và tổng dự kiến; thao tác ghi tiếp tục được SQL xác thực và tính lại. Giao dịch được lưu vào account của booking, gồm dịch vụ, số lượng, thiết bị, nhân viên, UUID và số tiền thực thu. Dịch vụ nằm trong gói có đơn giá 0. Khi ngoại tuyến, giao dịch được xếp hàng; giá và account chỉ được xác nhận lúc đồng bộ.
+
 ## SQL và kiểm tra
 
-Setup chạy 01-schema → 03-seed → 04-auth → 05-itinerary → 06-registration → 07-cancellation → 08-admin → 09-integrity → 10-pos-sync → 11-pos-receipts → 12-passenger-finance → 13-onboard-activities trên DB mới. Với DB CruiseWeek1 hiện có, setup giữ dữ liệu rồi chạy các migration để cập nhật nghiệp vụ. Seed không gọi usp_Register. Nếu dùng SSMS bật SQLCMD Mode. Sau khi chạy SQL bằng tay, chạy setup để cấp hash demo và cập nhật migration.
+Setup chạy 01-schema → 03-seed → 04-auth → 05-itinerary → 06-registration → 07-cancellation → 08-admin → 09-integrity → 10-pos-sync → 11-pos-receipts → 12-passenger-finance → 13-onboard-activities → 14-checkin trên DB mới. Với DB CruiseWeek1 hiện có, setup giữ dữ liệu rồi chạy các migration để cập nhật nghiệp vụ. Seed không gọi usp_Register. Nếu dùng SSMS bật SQLCMD Mode. Sau khi chạy SQL bằng tay, chạy setup để cấp hash demo và cập nhật migration.
 
 Chạy `npm run check`, `npm run test:auth`, `npm run test:integrity`, `npm run test:pos` và `npm run test:finance`. Test nghiệp vụ tự tạo database riêng rồi xóa sau khi chạy. Hướng dẫn: `docs/POS-OFFLINE.md`, `docs/PASSENGER-FINANCE.md`; chi tiết API/quyền: `docs/AUTH.md`.
 
@@ -48,4 +56,4 @@ Chạy `npm run check`, `npm run test:auth`, `npm run test:integrity`, `npm run 
 
 Push server.mjs, src, public, scripts, tests, database, docs, README.md, CHAY-WEB.cmd, package.json, package-lock.json và .gitignore. Không push .tmp, node_modules, .env hoặc log.
 
-Các API chính: đăng nhập/đăng xuất, lịch trình, đăng ký/hủy và nhóm `/api/admin/*` cho dữ liệu quản trị, người dùng, danh mục, booking, gói dịch vụ, chính sách và mã định danh. Backend và SQL đều kiểm tra quyền; dữ liệu hành khách tiếp tục bị giới hạn theo chủ booking. Cookie HttpOnly và SameSite=Strict; restart server cần đăng nhập lại. Bản học phần chạy localhost.
+Các API chính: đăng nhập/đăng xuất, lịch trình, đăng ký/hủy, `/api/qr`, `/api/checkin`, `/api/checkin/:registrationId/return`, `/api/pos/quote`, `/api/pos/sync` và nhóm `/api/admin/*` cho dữ liệu quản trị, người dùng, danh mục, booking, gói dịch vụ, chính sách và mã định danh. Backend và SQL đều kiểm tra quyền; QR và dữ liệu hành khách bị giới hạn theo chủ booking. Cookie HttpOnly và SameSite=Strict; restart server cần đăng nhập lại. Bản học phần chạy localhost.

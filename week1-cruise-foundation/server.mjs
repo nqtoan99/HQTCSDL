@@ -5,6 +5,7 @@ import {randomBytes} from 'node:crypto';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {query,jsonQuery,literal,verifyPassword,hashPassword} from './src/db.mjs';
+import QRCode from 'qrcode';
 const root=fileURLToPath(new URL('./public/',import.meta.url));
 const port=Number(process.env.PORT||3001),cookieName='aurora_week1';
 const sessions=new Map(),attempts=new Map(),ttl=Number(process.env.SESSION_TTL_SECONDS||28800)*1000;
@@ -91,7 +92,10 @@ async function state(u){
    LEFT JOIN dbo.Ports op ON op.PortId=ic.OldPortId LEFT JOIN dbo.Ports np ON np.PortId=ic.NewPortId LEFT JOIN dbo.Ports p ON p.PortId=s.PortId
  ) h WHERE h.CruiseId IN(${cs}) ORDER BY h.CreatedAt DESC`:`SELECT CAST(NULL AS bigint) AS ChangeId,CAST(NULL AS int) AS CruiseId,CAST(NULL AS varchar(10)) AS ChangeType,CAST(NULL AS nvarchar(200)) AS Subject,CAST(NULL AS nvarchar(500)) AS OldSchedule,CAST(NULL AS nvarchar(500)) AS NewSchedule,CAST(NULL AS nvarchar(500)) AS Reason,CAST(NULL AS nvarchar(100)) AS Staff,CAST(NULL AS datetime2) AS CreatedAt WHERE 1=0`;
  const cols={cruises:`SELECT c.*,s.Name AS Ship FROM Cruises c JOIN Ships s ON s.ShipId=c.ShipId WHERE c.CruiseId IN(${cs})`,ships:'SELECT ShipId,Name,Capacity FROM Ships',ports:'SELECT PortId,Name FROM Ports',stops:`SELECT s.StopId,s.CruiseId,s.PortId,p.Name AS Port,s.Arrival,s.Departure FROM Stops s JOIN Ports p ON p.PortId=s.PortId WHERE s.CruiseId IN(${cs})`,activities:`SELECT a.*,COALESCE(z.Name,p.Name,N'—') AS Location FROM Activities a LEFT JOIN Zones z ON z.ZoneId=a.ZoneId LEFT JOIN Stops st ON st.StopId=a.StopId LEFT JOIN Ports p ON p.PortId=st.PortId WHERE a.CruiseId IN(${cs})${kind}`,registrations:registrationStats,notifications:`SELECT NotificationId,CruiseId,Message,CreatedAt FROM Notifications WHERE CruiseId IN(${cs})`,changes:historyQuery,services:'SELECT ServiceId,Name,Price FROM Services',devices:"SELECT DeviceId,Name,Kind FROM Devices WHERE Kind='POS'",packageServices:'SELECT PackageId,ServiceId FROM PackageServices',
-  bookings:bookingQuery(u)+(guests?'':' AND 1=0'),accounts:`SELECT AccountId,BookingId,Status FROM Accounts WHERE BookingId IN(${bs})${money?'':' AND 1=0'}`,
+ bookings:bookingQuery(u)+(guests?'':' AND 1=0'),accounts:`SELECT AccountId,BookingId,Status FROM Accounts WHERE BookingId IN(${bs})${money?'':' AND 1=0'}`,
+ identifiers:guest?`SELECT i.IdentifierId,i.BookingId,i.Code,i.Kind FROM dbo.Identifiers i JOIN dbo.Bookings b ON b.BookingId=i.BookingId JOIN dbo.Passengers p ON p.PassengerId=b.PassengerId WHERE p.UserId=${u.UserId} AND i.Active=1`:'SELECT IdentifierId,BookingId,Code,Kind FROM dbo.Identifiers WHERE 1=0',
+ checkinDevices:u.roles.some(r=>['ACTIVITY','SHORE','ADMIN'].includes(r))?"SELECT DeviceId,Name,Kind FROM dbo.Devices WHERE Kind='CHECKIN'":'SELECT DeviceId,Name,Kind FROM dbo.Devices WHERE 1=0',
+ checkinRegistrations:(guest||u.roles.some(r=>['ACTIVITY','SHORE','ADMIN'].includes(r)))?`SELECT r.RegistrationId,r.BookingId,r.ActivityId,a.CruiseId,r.Status,a.Name AS Activity,a.Kind,a.StartsAt,a.ReturnAt,p.UserId,u.Name AS Passenger,ci.CreatedAt AS CheckedInAt,ci.ReturnedAt,ci.DeviceId,d.Name AS Device,ci.StaffId,staff.Name AS Staff FROM dbo.Registrations r JOIN dbo.Activities a ON a.ActivityId=r.ActivityId JOIN dbo.Bookings b ON b.BookingId=r.BookingId JOIN dbo.Passengers p ON p.PassengerId=b.PassengerId JOIN dbo.Users u ON u.UserId=p.UserId LEFT JOIN dbo.CheckIns ci ON ci.RegistrationId=r.RegistrationId LEFT JOIN dbo.Devices d ON d.DeviceId=ci.DeviceId LEFT JOIN dbo.Users staff ON staff.UserId=ci.StaffId WHERE a.CruiseId IN(${cs})${guest?' AND p.UserId='+u.UserId:''}${kind}`:`SELECT RegistrationId,BookingId,ActivityId,Status,CAST(NULL AS nvarchar(150)) AS Activity,CAST(NULL AS varchar(20)) AS Kind,CAST(NULL AS datetime2) AS StartsAt,CAST(NULL AS datetime2) AS ReturnAt,CAST(NULL AS int) AS UserId,CAST(NULL AS nvarchar(100)) AS Passenger,CAST(NULL AS datetime2) AS CheckedInAt,CAST(NULL AS datetime2) AS ReturnedAt,CAST(NULL AS int) AS DeviceId,CAST(NULL AS nvarchar(100)) AS Device,CAST(NULL AS int) AS StaffId,CAST(NULL AS nvarchar(100)) AS Staff FROM dbo.Registrations WHERE 1=0`,
   transactions:`SELECT t.TransactionId,t.AccountId,t.Amount,t.Status,t.CreatedAt,t.RefundAmount,t.RefundedAt,COALESCE(s.Name,a.Name,N'Dịch vụ') AS Description FROM Transactions t JOIN Accounts ac ON ac.AccountId=t.AccountId LEFT JOIN Services s ON s.ServiceId=t.ServiceId LEFT JOIN Registrations r ON r.RegistrationId=t.RegistrationId LEFT JOIN Activities a ON a.ActivityId=r.ActivityId WHERE ac.BookingId IN(${bs})${money?'':' AND 1=0'}`};
  const out=await jsonQuery('SELECT '+Object.entries(cols).map(([k,sql])=>`JSON_QUERY((${sql} FOR JSON PATH)) AS [${k}]`).join(',')+' FOR JSON PATH,WITHOUT_ARRAY_WRAPPER');
  for(const k of Object.keys(cols))if(!Array.isArray(out[k]))out[k]=[];return out;
@@ -115,6 +119,27 @@ const server=http.createServer(async(req,res)=>{
   if(url.pathname==='/api/logout'&&req.method==='POST'){sessions.delete(sessionId(req));res.setHeader('Set-Cookie',`${cookieName}=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0`);return send(200,{ok:true});}
   if(url.pathname.startsWith('/api/')){
    const u=await getUser(req);if(!u)fail(401,'Vui lòng đăng nhập.');
+   if(req.method==='GET'&&url.pathname==='/api/qr'){
+    requireRoles(u,'PASSENGER');const bookingId=id(url.searchParams.get('booking'));
+    const rows=await jsonQuery(`SELECT TOP(1) i.Code FROM dbo.Identifiers i JOIN dbo.Bookings b ON b.BookingId=i.BookingId JOIN dbo.Passengers p ON p.PassengerId=b.PassengerId WHERE i.BookingId=${bookingId} AND i.Active=1 AND ${u.roles.includes('ADMIN')?'1=1':`p.UserId=${u.UserId}`} ORDER BY i.IdentifierId FOR JSON PATH`);
+    if(!rows.length)fail(404,'Booking không có mã định danh đang hoạt động.');
+    const svg=await QRCode.toString(rows[0].Code,{type:'svg',margin:2});res.writeHead(200,{'Content-Type':'image/svg+xml; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});return res.end(svg);
+   }
+   if(req.method==='POST'&&url.pathname==='/api/checkin'){
+    const b=await requestJson(req),activityId=id(b.activityId),deviceId=id(b.deviceId),code=text(b.code,100).trim();
+    const kind=(await jsonQuery(`SELECT Kind FROM dbo.Activities WHERE ActivityId=${activityId} FOR JSON PATH`))[0]?.Kind;if(!kind)fail(404,'Hoạt động không tồn tại.');
+    requireRoles(u,kind==='SHORE'?'SHORE':'ACTIVITY');
+    await runProcedure(`EXEC dbo.usp_CheckIn @ActivityId=${activityId},@Code=${literal(code)},@DeviceId=${deviceId},@StaffId=${u.UserId};`);
+    return send(200,{ok:true,message:'Check-in thành công.'});
+   }
+   const returnMatch=/^\/api\/checkin\/(\d+)\/return$/.exec(url.pathname);
+   if(req.method==='POST'&&returnMatch){requireRoles(u,'SHORE');await requestJson(req);await runProcedure(`EXEC dbo.usp_ReturnToShip @RegistrationId=${id(returnMatch[1])},@StaffId=${u.UserId};`);return send(200,{ok:true,message:'Đã ghi nhận khách về tàu.'});}
+   if(req.method==='POST'&&url.pathname==='/api/pos/quote'){
+    requireRoles(u,'POS');const b=await requestJson(req),code=text(b.code,100).trim(),serviceId=id(b.serviceId),quantity=whole(b.quantity,1,100,'Số lượng');
+    const quote=(await jsonQuery(`SELECT TOP(1) b.BookingId,a.AccountId,a.Status AS AccountStatus,u.Name AS Passenger,pk.Name AS Package,s.ServiceId,s.Name AS Service,s.Price AS ListUnitPrice,CAST(CASE WHEN ps.ServiceId IS NULL THEN 0 ELSE 1 END AS bit) AS IncludedInPackage,CONVERT(decimal(18,2),CASE WHEN ps.ServiceId IS NULL THEN s.Price ELSE 0 END) AS UnitPrice,CONVERT(decimal(18,2),CASE WHEN ps.ServiceId IS NULL THEN s.Price*${quantity} ELSE 0 END) AS Total,CONVERT(decimal(18,2),COALESCE((SELECT SUM(CASE t.Status WHEN 'POSTED' THEN t.Amount WHEN 'REFUNDED' THEN t.Amount-COALESCE(t.RefundAmount,0) ELSE 0 END) FROM dbo.Transactions t WHERE t.AccountId=a.AccountId),0)) AS AccountBalance FROM dbo.Identifiers i JOIN dbo.Bookings b ON b.BookingId=i.BookingId JOIN dbo.Passengers p ON p.PassengerId=b.PassengerId JOIN dbo.Users u ON u.UserId=p.UserId JOIN dbo.Packages pk ON pk.PackageId=b.PackageId JOIN dbo.Accounts a ON a.BookingId=b.BookingId JOIN dbo.Services s ON s.ServiceId=${serviceId} LEFT JOIN dbo.PackageServices ps ON ps.PackageId=b.PackageId AND ps.ServiceId=s.ServiceId WHERE i.Code=${literal(code)} AND i.Active=1 FOR JSON PATH`))[0];
+    if(!quote)fail(422,'Mã hành khách hoặc dịch vụ không hợp lệ.');
+    return send(200,quote);
+   }
    if(req.method==='POST'&&url.pathname==='/api/itinerary/cruises'){
     requireRoles(u,'ITINERARY');const b=await requestJson(req),cruiseId=maybeId(b.cruiseId),shipId=id(b.shipId),name=text(b.name,150).trim(),startDate=dateOnly(b.startDate),endDate=dateOnly(b.endDate),status=text(b.status,20).trim().toUpperCase(),reason=text(b.reason,500).trim();
     if(endDate<startDate)fail(400,'Ngày kết thúc phải bằng hoặc sau ngày bắt đầu.');
@@ -135,7 +160,7 @@ const server=http.createServer(async(req,res)=>{
     await runProcedure(`EXEC dbo.usp_SyncPOS @Code=${literal(code)},@ServiceId=${serviceId},@Quantity=${quantity},@DeviceId=${deviceId},@StaffId=${u.UserId},@ClientId=${literal(clientId)};`);
     const transaction=(await jsonQuery(`SELECT t.TransactionId,t.ClientId,t.AccountId,t.ServiceId,t.DeviceId,t.Quantity,t.Amount,t.Status,t.CreatedAt FROM dbo.Transactions t WHERE t.ClientId=CONVERT(uniqueidentifier,${literal(clientId)}) FOR JSON PATH`))[0];
     if(!transaction)throw Error('SQL Server chưa trả về giao dịch đã đồng bộ.');
-    const receipt=(await jsonQuery(`SELECT r.ReceiptId,r.ClientId,r.DeviceId,d.Name AS DeviceName,r.StaffId,r.SyncedAt,t.TransactionId,t.ServiceId,s.Name AS ServiceName,t.Quantity,t.Amount,t.Status FROM dbo.POSReceipts r JOIN dbo.Devices d ON d.DeviceId=r.DeviceId JOIN dbo.Transactions t ON t.ClientId=r.ClientId JOIN dbo.Services s ON s.ServiceId=t.ServiceId WHERE r.ClientId=CONVERT(uniqueidentifier,${literal(clientId)}) AND r.StaffId=${u.UserId} FOR JSON PATH`))[0];
+    const receipt=(await jsonQuery(`SELECT r.ReceiptId,r.ClientId,r.DeviceId,d.Name AS DeviceName,r.StaffId,staff.Name AS StaffName,r.SyncedAt,t.TransactionId,t.AccountId,b.BookingId,guest.Name AS PassengerName,pk.Name AS Package,t.ServiceId,s.Name AS ServiceName,t.Quantity,t.Amount,t.Status FROM dbo.POSReceipts r JOIN dbo.Devices d ON d.DeviceId=r.DeviceId JOIN dbo.Users staff ON staff.UserId=r.StaffId JOIN dbo.Transactions t ON t.ClientId=r.ClientId JOIN dbo.Services s ON s.ServiceId=t.ServiceId JOIN dbo.Accounts a ON a.AccountId=t.AccountId JOIN dbo.Bookings b ON b.BookingId=a.BookingId JOIN dbo.Passengers p ON p.PassengerId=b.PassengerId JOIN dbo.Users guest ON guest.UserId=p.UserId JOIN dbo.Packages pk ON pk.PackageId=b.PackageId WHERE r.ClientId=CONVERT(uniqueidentifier,${literal(clientId)}) AND r.StaffId=${u.UserId} FOR JSON PATH`))[0];
     if(!receipt)throw Error('SQL Server chưa trả về biên nhận đã lưu.');
     return send(200,{ok:true,transaction,receipt});
    }
@@ -148,7 +173,7 @@ const server=http.createServer(async(req,res)=>{
     return send(201,dispute);
    }
    if(req.method==='GET'&&url.pathname==='/api/pos/receipts'){
-    requireRoles(u,'POS');return send(200,await jsonQuery(`SELECT TOP(50) r.ReceiptId,r.ClientId,r.DeviceId,d.Name AS DeviceName,r.StaffId,r.SyncedAt,t.TransactionId,t.ServiceId,s.Name AS ServiceName,t.Quantity,t.Amount,t.Status FROM dbo.POSReceipts r JOIN dbo.Devices d ON d.DeviceId=r.DeviceId JOIN dbo.Transactions t ON t.ClientId=r.ClientId JOIN dbo.Services s ON s.ServiceId=t.ServiceId WHERE r.StaffId=${u.UserId} ORDER BY r.SyncedAt DESC FOR JSON PATH`));
+    requireRoles(u,'POS');return send(200,await jsonQuery(`SELECT TOP(50) r.ReceiptId,r.ClientId,r.DeviceId,d.Name AS DeviceName,r.StaffId,staff.Name AS StaffName,r.SyncedAt,t.TransactionId,t.AccountId,b.BookingId,guest.Name AS PassengerName,pk.Name AS Package,t.ServiceId,s.Name AS ServiceName,t.Quantity,t.Amount,t.Status FROM dbo.POSReceipts r JOIN dbo.Devices d ON d.DeviceId=r.DeviceId JOIN dbo.Users staff ON staff.UserId=r.StaffId JOIN dbo.Transactions t ON t.ClientId=r.ClientId JOIN dbo.Services s ON s.ServiceId=t.ServiceId JOIN dbo.Accounts a ON a.AccountId=t.AccountId JOIN dbo.Bookings b ON b.BookingId=a.BookingId JOIN dbo.Passengers p ON p.PassengerId=b.PassengerId JOIN dbo.Users guest ON guest.UserId=p.UserId JOIN dbo.Packages pk ON pk.PackageId=b.PackageId WHERE r.StaffId=${u.UserId} ORDER BY r.SyncedAt DESC FOR JSON PATH`));
    }
    if(req.method==='POST'&&url.pathname==='/api/activity/activities'){
     requireRoles(u,'ACTIVITY');const b=await requestJson(req),activityId=maybeId(b.activityId),cruiseId=id(b.cruiseId),zoneId=id(b.zoneId),name=text(b.name,150).trim(),startsAt=dateTime(b.startsAt),endsAt=dateTime(b.endsAt),capacity=whole(b.capacity,1,100000,'Sức chứa'),fee=amount(b.fee,'Phí tham gia'),status=text(b.status||'OPEN',20).trim().toUpperCase();
