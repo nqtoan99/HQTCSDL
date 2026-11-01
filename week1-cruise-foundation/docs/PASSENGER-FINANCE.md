@@ -16,6 +16,11 @@ Các migration `12-passenger-finance.sql` bổ sung metadata tranh chấp, chỉ
 
 ## Chạy và kiểm thử
 
+$env:SQL_SERVER = "DESKTOP-E1LLLM9"
+$env:SQL_DATABASE = "CruiseWeek1"
+npm run setup
+
+
 ```powershell
 npm run setup
 npm run test:finance
