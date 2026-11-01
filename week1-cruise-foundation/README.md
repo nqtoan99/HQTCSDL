@@ -68,5 +68,5 @@ Chạy `npm run check`, `npm run test:auth`, `npm run test:integrity`, `npm run 
 
 Push server.mjs, src, public, scripts, tests, database, docs, README.md, CHAY-WEB.cmd, package.json, package-lock.json và .gitignore. Không push .tmp, node_modules, .env hoặc log.
 
-Các API chính: đăng nhập/đăng xuất, lịch trình, đăng ký/hủy, `/api/qr`, `/api/checkin`, `/api/checkin/:registrationId/return`, `/api/pos/quote`, `/api/pos/sync`, `/api/passenger/finance`, `/api/passenger/disputes`, `/api/finance/data`, `/api/finance/*`, `/api/notifications`, `/api/notifications/read` và nhóm `/api/admin/*`. Backend và SQL đều kiểm tra quyền; dữ liệu hành khách bị giới hạn theo chủ booking. Cookie HttpOnly và SameSite=Strict; restart server cần đăng nhập lại. Bản học phần chạy localhost.
+Các API chính: đăng nhập/đăng xuất, lịch trình, đăng ký/hủy, `/api/qr`, `/api/checkin`, `/api/checkin/:registrationId/return`, `/api/pos/quote`, `/api/pos/sync`, `/api/passenger/finance`, `/api/passenger/disputes`, `/api/finance/data`, `/api/finance/*`, `/api/notifications`, `/api/notifications/read` và nhóm `/api/admin/*`. Backend và SQL đều kiểm tra quyền; hành khách chỉ xem booking của mình, POS không nhận dữ liệu booking/tài chính, và vận hành chỉ nhận số liệu tổng hợp. Cookie HttpOnly và SameSite=Strict; restart server cần đăng nhập lại. Bản học phần chạy localhost.
 

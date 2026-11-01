@@ -103,7 +103,8 @@ async function state(u){
  const guest=u.roles.includes('PASSENGER')&&!u.roles.includes('ADMIN');
  const bs=guest?`SELECT b.BookingId FROM Bookings b JOIN Passengers p ON p.PassengerId=b.PassengerId WHERE p.UserId=${u.UserId}`:'SELECT BookingId FROM Bookings';
  const cs=guest?`SELECT CruiseId FROM Bookings WHERE BookingId IN(${bs})`:'SELECT CruiseId FROM Cruises';
- const guests=u.roles.some(r=>['PASSENGER','ACTIVITY','SHORE','FINANCE','OPERATIONS','ADMIN'].includes(r));
+ // Operations receives aggregate activity and feedback data, not passenger-level bookings.
+ const guests=u.roles.some(r=>['PASSENGER','ACTIVITY','SHORE','FINANCE','ADMIN'].includes(r));
  const money=u.roles.some(r=>['PASSENGER','FINANCE','ADMIN'].includes(r));
  const itineraryAccess=u.roles.some(r=>['ITINERARY','ADMIN'].includes(r));
  const kind=u.roles.includes('ADMIN')?'':u.roles.includes('ACTIVITY')&&!u.roles.includes('SHORE')?" AND a.Kind='ONBOARD'":u.roles.includes('SHORE')&&!u.roles.includes('ACTIVITY')?" AND a.Kind='SHORE'":'';
