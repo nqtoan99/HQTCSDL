@@ -27,6 +27,7 @@ Trong dữ liệu mẫu, gói Premium bao gồm hoạt động Đêm nhạc trê
 | Tour bờ | shore@demo.local |
 | POS | pos@demo.local |
 | Tài chính | finance@demo.local |
+| POS + Tài chính | posfinance@demo.local |
 | Vận hành | operations@demo.local |
 | Quản trị | admin@demo.local |
 
