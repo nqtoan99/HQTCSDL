@@ -2,6 +2,10 @@
 
 Mốc hiện tại: đăng nhập/đăng xuất, mật khẩu băm scrypt, phiên 8 giờ, 9 vai trò, Tổng quan theo booking/chuyến, lịch trình, đăng ký, hủy, quản trị, POS, tài chính, check-in và phản hồi. Finance/Admin đối soát giao dịch POS, xử lý tranh chấp, void/hoàn giao dịch có phân quyền, chốt tài khoản, ghi thanh toán mô phỏng, in hóa đơn và xuất CSV. Thông báo hỗ trợ gửi theo chuyến/vai trò/người dùng; hệ thống tự nhắc khách tập trung và về tàu, lưu trạng thái đọc theo tài khoản và chống tạo nhắc trùng. Hành khách chỉ gửi tranh chấp cho giao dịch thuộc booking của mình. Không phụ thuộc thư mục `cruise-sql` khi chạy.
 
+## Dashboard vận hành
+
+Vai trò Quản lý vận hành và Quản trị hệ thống xem dashboard theo chuyến: doanh thu ròng (đã trừ hoàn tiền), tỷ lệ lấp đầy tàu và hoạt động, tỷ lệ check-in trên số đăng ký được xác nhận, cùng điểm trung bình và số lượt phản hồi. Phần tiếp theo sẽ bổ sung chi phí cabin, cảnh báo khách chưa về tàu và xuất báo cáo.
+
 ## Chạy
 
 Cần Node.js từ 18, SQL Server và sqlcmd trong PATH. Cài dependency QR bằng `npm ci`, rồi mở terminal ở thư mục này:
