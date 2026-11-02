@@ -98,7 +98,7 @@ CREATE OR ALTER PROCEDURE dbo.usp_AdminSaveCatalog
 AS
 BEGIN
  SET NOCOUNT ON; SET XACT_ABORT ON;
- IF NOT EXISTS(SELECT 1 FROM dbo.UserRoles ur JOIN dbo.Roles r ON r.RoleId=ur.RoleId WHERE ur.UserId=@ActorId AND r.Code='ADMIN')
+ IF NOT EXISTS(SELECT 1 FROM dbo.UserRoles ur JOIN dbo.Roles r ON r.RoleId=ur.RoleId WHERE ur.UserId=@ActorId AND (r.Code='ADMIN' OR (r.Code='ACTIVITY' AND @Entity='service')))
   THROW 51280,N'Chỉ quản trị viên được thay đổi danh mục.',1;
  IF @Entity NOT IN('ship','zone','cabin','port','provider','service','package','device')
   THROW 51292,N'Danh mục không được hỗ trợ.',1;

@@ -141,7 +141,7 @@ async function state(u){
  (n.TargetType='USER' AND n.TargetUserId=${u.UserId} AND (
   EXISTS(SELECT 1 FROM dbo.Bookings nb JOIN dbo.Passengers np ON np.PassengerId=nb.PassengerId WHERE nb.CruiseId=n.CruiseId AND np.UserId=${u.UserId}) OR
   EXISTS(SELECT 1 FROM dbo.UserRoles nur JOIN dbo.Roles nrole ON nrole.RoleId=nur.RoleId WHERE nur.UserId=${u.UserId} AND nrole.Code<>'PASSENGER')))`;
- const cols={cruises:`SELECT c.*,s.Name AS Ship FROM Cruises c JOIN Ships s ON s.ShipId=c.ShipId WHERE c.CruiseId IN(${cs})`,ships:'SELECT ShipId,Name,Capacity FROM Ships',ports:'SELECT PortId,Name FROM Ports',stops:`SELECT s.StopId,s.CruiseId,s.PortId,p.Name AS Port,s.Arrival,s.Departure FROM Stops s JOIN Ports p ON p.PortId=s.PortId WHERE s.CruiseId IN(${cs})`,activities:`SELECT a.*,COALESCE(z.Name,p.Name,N'—') AS Location FROM Activities a LEFT JOIN Zones z ON z.ZoneId=a.ZoneId LEFT JOIN Stops st ON st.StopId=a.StopId LEFT JOIN Ports p ON p.PortId=st.PortId WHERE a.CruiseId IN(${cs})${kind}`,registrations:registrationStats,notifications:`SELECT n.NotificationId,n.CruiseId,n.Message,n.TargetType,n.TargetRoleId,n.TargetUserId,rt.Name AS TargetRoleName,tu.Name AS TargetUserName,rd.ReminderType,n.CreatedAt,CAST(CASE WHEN nr.UserId IS NULL THEN 0 ELSE 1 END AS bit) AS IsRead FROM dbo.Notifications n LEFT JOIN dbo.NotificationReads nr ON nr.NotificationId=n.NotificationId AND nr.UserId=${u.UserId} LEFT JOIN dbo.Roles rt ON rt.RoleId=n.TargetRoleId LEFT JOIN dbo.Users tu ON tu.UserId=n.TargetUserId LEFT JOIN dbo.ShoreReminderDispatches rd ON rd.NotificationId=n.NotificationId WHERE n.CruiseId IN(${cs}) AND (${noticeAudience})`,changes:historyQuery,services:'SELECT ServiceId,Name,Price FROM Services',devices:"SELECT DeviceId,Name,Kind FROM Devices WHERE Kind='POS'",packageServices:'SELECT PackageId,ServiceId FROM PackageServices',
+ const cols={cruises:`SELECT c.*,s.Name AS Ship FROM Cruises c JOIN Ships s ON s.ShipId=c.ShipId WHERE c.CruiseId IN(${cs})`,ships:'SELECT ShipId,Name,Capacity FROM Ships',ports:'SELECT p.PortId,p.Name,(SELECT COUNT(*) FROM dbo.Stops st WHERE st.PortId=p.PortId) AS StopCount FROM dbo.Ports p',stops:`SELECT s.StopId,s.CruiseId,s.PortId,p.Name AS Port,s.Arrival,s.Departure FROM Stops s JOIN Ports p ON p.PortId=s.PortId WHERE s.CruiseId IN(${cs})`,activities:`SELECT a.*,COALESCE(z.Name,p.Name,N'—') AS Location FROM Activities a LEFT JOIN Zones z ON z.ZoneId=a.ZoneId LEFT JOIN Stops st ON st.StopId=a.StopId LEFT JOIN Ports p ON p.PortId=st.PortId WHERE a.CruiseId IN(${cs})${kind}`,registrations:registrationStats,notifications:`SELECT n.NotificationId,n.CruiseId,n.Message,n.TargetType,n.TargetRoleId,n.TargetUserId,rt.Name AS TargetRoleName,tu.Name AS TargetUserName,rd.ReminderType,n.CreatedAt,CAST(CASE WHEN nr.UserId IS NULL THEN 0 ELSE 1 END AS bit) AS IsRead FROM dbo.Notifications n LEFT JOIN dbo.NotificationReads nr ON nr.NotificationId=n.NotificationId AND nr.UserId=${u.UserId} LEFT JOIN dbo.Roles rt ON rt.RoleId=n.TargetRoleId LEFT JOIN dbo.Users tu ON tu.UserId=n.TargetUserId LEFT JOIN dbo.ShoreReminderDispatches rd ON rd.NotificationId=n.NotificationId WHERE n.CruiseId IN(${cs}) AND (${noticeAudience})`,changes:historyQuery,services:'SELECT ServiceId,Name,Price FROM Services',devices:"SELECT DeviceId,Name,Kind FROM Devices WHERE Kind='POS'",packageServices:'SELECT PackageId,ServiceId FROM PackageServices',
  bookings:bookingQuery(u)+(guests?'':' AND 1=0'),accounts:`SELECT AccountId,BookingId,Status FROM Accounts WHERE BookingId IN(${bs})${money?'':' AND 1=0'}`,
  identifiers:guest?`SELECT i.IdentifierId,i.BookingId,i.Code,i.Kind FROM dbo.Identifiers i JOIN dbo.Bookings b ON b.BookingId=i.BookingId JOIN dbo.Passengers p ON p.PassengerId=b.PassengerId WHERE p.UserId=${u.UserId} AND i.Active=1`:'SELECT IdentifierId,BookingId,Code,Kind FROM dbo.Identifiers WHERE 1=0',
  checkinDevices:u.roles.some(r=>['ACTIVITY','SHORE','ADMIN'].includes(r))?"SELECT DeviceId,Name,Kind FROM dbo.Devices WHERE Kind='CHECKIN'":'SELECT DeviceId,Name,Kind FROM dbo.Devices WHERE 1=0',
@@ -191,6 +191,21 @@ const server=http.createServer(async(req,res)=>{
     quote.IncludedServices=await jsonQuery(`SELECT s.ServiceId,s.Name,s.Price FROM dbo.PackageServices ps JOIN dbo.Services s ON s.ServiceId=ps.ServiceId WHERE ps.PackageId=${quote.PackageId} ORDER BY s.Name FOR JSON PATH`);
     delete quote.PackageId;
     return send(200,quote);
+   }
+   if(req.method==='POST'&&url.pathname==='/api/itinerary/ports'){
+    requireRoles(u,'ITINERARY');const b=await requestJson(req),action=typeof b.action==='string'?b.action.trim().toUpperCase():'SAVE',portId=maybeId(b.portId);
+    if(action==='DELETE'){
+     if(!portId)fail(400,'Cảng cần xóa không hợp lệ.');
+     const port=(await jsonQuery(`SELECT PortId FROM dbo.Ports WHERE PortId=${portId} FOR JSON PATH`))[0];if(!port)fail(404,'Cảng không tồn tại.');
+     const stops=(await jsonQuery(`SELECT TOP(1) StopId FROM dbo.Stops WHERE PortId=${portId} FOR JSON PATH`))[0];if(stops)fail(409,'Cảng đã được dùng trong lịch trình; hãy giữ lại để bảo toàn lịch sử chuyến.');
+     await query(`DELETE FROM dbo.Ports WHERE PortId=${portId};`);return send(200,{ok:true});
+    }
+    if(action!=='SAVE')fail(400,'Thao tác cảng không hợp lệ.');
+    const name=text(b.name,100).trim();if(!name)fail(400,'Tên cảng không được để trống.');
+    const duplicate=(await jsonQuery(`SELECT PortId FROM dbo.Ports WHERE Name=${literal(name)} AND PortId<>${portId} FOR JSON PATH`))[0];if(duplicate)fail(409,'Tên cảng đã tồn tại.');
+    if(portId===0){await query(`INSERT dbo.Ports(Name) VALUES(${literal(name)});`);return send(201,{ok:true});}
+    const existing=(await jsonQuery(`SELECT PortId FROM dbo.Ports WHERE PortId=${portId} FOR JSON PATH`))[0];if(!existing)fail(404,'Cảng không tồn tại.');
+    await query(`UPDATE dbo.Ports SET Name=${literal(name)} WHERE PortId=${portId};`);return send(200,{ok:true});
    }
    if(req.method==='POST'&&url.pathname==='/api/itinerary/cruises'){
     requireRoles(u,'ITINERARY');const b=await requestJson(req),cruiseId=maybeId(b.cruiseId),shipId=id(b.shipId),name=text(b.name,150).trim(),startDate=dateOnly(b.startDate),endDate=dateOnly(b.endDate),status=text(b.status,20).trim().toUpperCase(),reason=text(b.reason,500).trim();
@@ -281,7 +296,14 @@ const server=http.createServer(async(req,res)=>{
     if(path==='/api/shore/excursions'){const activityId=maybeId(b.activityId),cruiseId=id(b.cruiseId),stopId=id(b.stopId),providerId=id(b.providerId),name=text(b.name,150).trim(),gatherAt=dateTime(b.gatherAt),returnAt=dateTime(b.returnAt),capacity=whole(b.capacity,1,100000,'Sức chứa'),fee=amount(b.fee,'Phí'),status=text(b.status||'OPEN',20).trim().toUpperCase();if(returnAt<=gatherAt)fail(400,'Giờ về tàu phải sau giờ tập trung.');await runProcedure(`EXEC dbo.usp_SaveShoreExcursion @ActorId=${u.UserId},@ActivityId=${activityId},@CruiseId=${cruiseId},@StopId=${stopId},@ProviderId=${providerId},@Name=${literal(name)},@GatherAt=${literal(gatherAt)},@ReturnAt=${literal(returnAt)},@Capacity=${capacity},@Fee=${fee},@Status=${literal(status)};`);return send(activityId?200:201,{ok:true});}
     if(path==='/api/shore/groups'){const groupId=maybeId(b.groupId),activityId=id(b.activityId),name=text(b.name,100).trim(),vehicleId=maybeId(b.vehicleId),guideId=maybeId(b.guideId),capacity=whole(b.capacity,1,100000,'Sức chứa nhóm'),active=b.active!==false;await runProcedure(`EXEC dbo.usp_SaveExcursionGroup @ActorId=${u.UserId},@GroupId=${groupId},@ActivityId=${activityId},@Name=${literal(name)},@VehicleId=${vehicleId||null},@GuideId=${guideId||null},@Capacity=${capacity},@Active=${active?1:0};`);return send(groupId?200:201,{ok:true});}
     if(path==='/api/shore/assignments'){const registrationId=id(b.registrationId),groupId=maybeId(b.groupId);await runProcedure(`EXEC dbo.usp_AssignExcursionGuest @ActorId=${u.UserId},@RegistrationId=${registrationId},@GroupId=${groupId||null};`);return send(200,{ok:true});}
-   }   if(req.method==='POST'&&url.pathname==='/api/activity/activities'){
+   }   if(req.method==='POST'&&url.pathname==='/api/activity/services'){
+     requireRoles(u,'ACTIVITY');const b=await requestJson(req),serviceId=maybeId(b.serviceId),name=text(b.name,100).trim(),price=amount(b.price,'Giá dịch vụ');
+     if(!name)fail(400,'Tên dịch vụ không được để trống.');
+     const duplicate=(await jsonQuery(`SELECT ServiceId FROM dbo.Services WHERE Name=${literal(name)} AND ServiceId<>${serviceId} FOR JSON PATH`))[0];if(duplicate)fail(409,'Tên dịch vụ đã tồn tại.');
+     await runProcedure(`EXEC dbo.usp_AdminSaveCatalog @ActorId=${u.UserId},@Entity='service',@Id=${serviceId},@Name=${literal(name)},@Price=${price};`);
+     return send(serviceId===0?201:200,{ok:true});
+    }
+    if(req.method==='POST'&&url.pathname==='/api/activity/activities'){
     requireRoles(u,'ACTIVITY');const b=await requestJson(req),activityId=maybeId(b.activityId),cruiseId=id(b.cruiseId),zoneId=id(b.zoneId),name=text(b.name,150).trim(),startsAt=dateTime(b.startsAt),endsAt=dateTime(b.endsAt),capacity=whole(b.capacity,1,100000,'Sức chứa'),fee=amount(b.fee,'Phí tham gia'),status=text(b.status||'OPEN',20).trim().toUpperCase();
     if(endsAt<=startsAt)fail(400,'Thời gian kết thúc phải sau thời gian bắt đầu.');
     if(!['OPEN','DELAYED','COMPLETED'].includes(status))fail(400,'Trạng thái hoạt động không hợp lệ.');
@@ -418,9 +440,10 @@ const server=http.createServer(async(req,res)=>{
       (SELECT COUNT(*) FROM dbo.Registrations r WHERE r.ActivityId=a.ActivityId AND r.Status='WAITLIST') AS Waitlist,
       (SELECT COUNT(*) FROM dbo.Registrations r WHERE r.ActivityId=a.ActivityId AND r.Status='CANCELLED') AS Cancelled
       FROM dbo.Activities a JOIN dbo.Cruises c ON c.CruiseId=a.CruiseId LEFT JOIN dbo.Zones z ON z.ZoneId=a.ZoneId WHERE a.Kind='ONBOARD' ORDER BY a.StartsAt,a.ActivityId FOR JSON PATH)) AS activities,
+     JSON_QUERY((SELECT ServiceId,Name,Price FROM dbo.Services ORDER BY Name FOR JSON PATH)) AS services,
      JSON_QUERY((SELECT CancelHours,RefundPercent FROM dbo.Policy WHERE PolicyId=1 FOR JSON PATH)) AS policy
     FOR JSON PATH,WITHOUT_ARRAY_WRAPPER`);
-    for(const key of ['cruises','zones','activities','policy'])if(!Array.isArray(data[key]))data[key]=[];return send(200,data);
+    for(const key of ['cruises','zones','activities','services','policy'])if(!Array.isArray(data[key]))data[key]=[];return send(200,data);
    }
    if(req.method==='GET'&&url.pathname==='/api/shore/data'){
     requireRoles(u,'SHORE');const data=await jsonQuery(`SELECT

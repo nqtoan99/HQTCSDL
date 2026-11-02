@@ -39,6 +39,14 @@ Trong dữ liệu mẫu, gói Premium bao gồm hoạt động Đêm nhạc trê
 
 Đã hoàn tất lát cắt Tổng quan, đăng nhập/phân quyền, lịch trình, hoạt động trên tàu, đăng ký/danh sách chờ, hủy/hoàn phí, quản trị, chi phí hành khách, POS, check-in, phản hồi, tài chính vận hành và thông báo. Chốt tài khoản bị chặn khi còn tranh chấp hoặc POS chưa đối soát. Hệ thống tạo hóa đơn và thanh toán `MOCK` trong cùng transaction; tài khoản đã chốt không thể tiếp tục ghi giao dịch. Thông báo hiện hiển thị trong ứng dụng, không gửi SMS/push.
 
+## Quản lý cảng
+
+Vai trò Điều phối hành trình có thể thêm và sửa cảng trong danh mục để dùng ở các điểm dừng. Cảng đã được dùng trong lịch trình không thể xóa; API kiểm tra quyền, tên trùng và liên kết trước khi lưu.
+
+## Quản lý dịch vụ
+
+Vai trò Quản lý hoạt động có thể xem danh mục dịch vụ, thêm dịch vụ mới và cập nhật tên hoặc giá. API giới hạn thao tác này cho vai trò ACTIVITY; giao dịch đã ghi nhận vẫn giữ nguyên số tiền ban đầu.
+
 ## Tour bờ
 
 Vai trò Quản lý tour bờ tạo, sửa và tìm tour; quản lý thông tin nhà cung cấp, xe, hướng dẫn viên; đặt giờ tập trung và giờ về tàu trong thời gian dừng cảng; tạo nhóm theo xe/hướng dẫn viên và gán khách đã xác nhận vào nhóm với kiểm tra sức chứa, quyền truy cập và audit.
