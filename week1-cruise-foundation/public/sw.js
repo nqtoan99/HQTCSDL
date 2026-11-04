@@ -1,5 +1,17 @@
-const CACHE = 'aurora-week1-shell-v3';
-const APP_SHELL = ['/', '/index.html', '/style.css', '/app.js', '/manifest.webmanifest'];
+const CACHE = 'aurora-week1-shell-v4';
+const APP_SHELL = [
+  '/',
+  '/index.html',
+  '/style.css',
+  '/app-root.js',
+  '/app.js',
+  '/vendor/react.production.min.js',
+  '/vendor/react-dom.production.min.js',
+  '/manifest.webmanifest',
+  '/icons/aurora-192.png',
+  '/icons/aurora-512.png',
+];
+const APP_SHELL_PATHS = new Set(APP_SHELL);
 
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(APP_SHELL)));
@@ -18,8 +30,10 @@ self.addEventListener('fetch', event => {
   const request = event.request;
   const url = new URL(request.url);
   if (request.method !== 'GET' || url.origin !== self.location.origin || url.pathname.startsWith('/api/')) return;
+  if (url.search || !APP_SHELL_PATHS.has(url.pathname)) return;
 
   event.respondWith((async () => {
+    const cached = await caches.match(request);
     try {
       const response = await fetch(request);
       if (response.ok) {
@@ -28,7 +42,7 @@ self.addEventListener('fetch', event => {
       }
       return response;
     } catch {
-      return (await caches.match(request)) || (request.mode === 'navigate' ? await caches.match('/') : Response.error());
+      return cached || (request.mode === 'navigate' ? await caches.match('/') : Response.error());
     }
   })());
 });

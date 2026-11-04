@@ -484,7 +484,7 @@ const server=http.createServer(async(req,res)=>{
   if(req.method!=='GET')fail(405,'Method không hỗ trợ.');
   const file=path.resolve(root,'.'+(url.pathname==='/'?'/index.html':decodeURIComponent(url.pathname)));
   if(!file.startsWith(root))fail(403,'Không được phép truy cập.');
-  const data=await readFile(file);res.writeHead(200,{'Content-Type':({'.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.js':'text/javascript; charset=utf-8','.json':'application/json; charset=utf-8','.webmanifest':'application/manifest+json; charset=utf-8'})[path.extname(file)]||'application/octet-stream','Cache-Control':'no-cache','X-Content-Type-Options':'nosniff'});res.end(data);
+  const data=await readFile(file);res.writeHead(200,{'Content-Type':({'.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.js':'text/javascript; charset=utf-8','.json':'application/json; charset=utf-8','.webmanifest':'application/manifest+json; charset=utf-8','.png':'image/png'})[path.extname(file)]||'application/octet-stream','Cache-Control':'no-cache','X-Content-Type-Options':'nosniff'});res.end(data);
  }catch(e){const status=e.status||(e.code==='ENOENT'?404:503);send(status,{error:status===503?'Chưa kết nối được database. Kiểm tra SQL Server và chạy npm run setup.':e.message});}
 });
 await query('SELECT TOP(1) PasswordHash,Active FROM Users;');

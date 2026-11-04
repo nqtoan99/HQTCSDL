@@ -1,12 +1,16 @@
 {
   "id": "/",
-  "name": "Aurora Cruise POS",
-  "short_name": "Aurora POS",
-  "description": "Giao diện POS và hàng đợi giao dịch ngoại tuyến Aurora Cruise",
+  "name": "Aurora Cruise",
+  "short_name": "Aurora",
+  "description": "Giao diện Aurora Cruise có thể cài đặt và dùng ngoại tuyến cho POS",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "lang": "vi",
   "background_color": "#f5f6f1",
-  "theme_color": "#174c42"
+  "theme_color": "#174c42",
+  "icons": [
+    { "src": "/icons/aurora-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/aurora-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
 }
