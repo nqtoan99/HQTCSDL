@@ -5,6 +5,7 @@ import {randomBytes} from 'node:crypto';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {query,jsonQuery,literal,verifyPassword,hashPassword} from './src/db.mjs';
+import {parseAmount,parseId,parseOptionalId,parseText,parseWhole} from './src/validation.mjs';
 import QRCode from 'qrcode';
 const root=fileURLToPath(new URL('./public/',import.meta.url));
 const port=Number(process.env.PORT||3001),cookieName='aurora_week1',reminderIntervalSeconds=Number(process.env.SHORE_REMINDER_INTERVAL_SECONDS||60);
@@ -12,11 +13,11 @@ const sessions=new Map(),attempts=new Map(),ttl=Number(process.env.SESSION_TTL_S
 if(!Number.isInteger(port)||port<1||port>65535||!Number.isFinite(ttl)||ttl<1000||!Number.isInteger(reminderIntervalSeconds)||reminderIntervalSeconds<10||reminderIntervalSeconds>3600)throw Error('PORT, SESSION_TTL_SECONDS hoặc SHORE_REMINDER_INTERVAL_SECONDS không hợp lệ.');
 const roles={PASSENGER:'Hành khách',ITINERARY:'Điều phối hành trình',ACTIVITY:'Quản lý hoạt động',SHORE:'Quản lý tour bờ',POS:'Nhân viên POS',FINANCE:'Tài chính – Lễ tân',OPERATIONS:'Quản lý vận hành',ADMIN:'Quản trị hệ thống'};
 const fail=(status,message)=>{throw Object.assign(Error(message),{status});};
-const id=v=>{const n=Number(v);if(!Number.isSafeInteger(n)||n<1)fail(400,'ID không hợp lệ.');return n;};
-const maybeId=v=>v===undefined||v===null||v===''?0:(Number.isSafeInteger(Number(v))&&Number(v)>=0?Number(v):fail(400,'ID không hợp lệ.'));
-const whole=(v,min,max,label='Số')=>{const n=Number(v);if(!Number.isSafeInteger(n)||n<min||n>max)fail(400,`${label} không hợp lệ.`);return n;};
-const amount=(v,label='Số tiền')=>{const n=Number(v);if(!Number.isFinite(n)||n<0||n>1e12)fail(400,`${label} không hợp lệ.`);return n;};
-const text=(v,max)=>{if(typeof v!=='string'||!v.trim()||v.length>max)fail(400,'Dữ liệu không hợp lệ.');return v;};
+const id=v=>parseId(v);
+const maybeId=v=>parseOptionalId(v);
+const whole=(v,min,max,label='Số')=>parseWhole(v,min,max,label);
+const amount=(v,label='Số tiền')=>parseAmount(v,label);
+const text=(v,max)=>{const value=parseText(v,max);if(!value.trim())fail(400,'Dữ liệu không hợp lệ.');return value;};
 function dateOnly(v){const s=text(v,10).trim();if(!/^\d{4}-\d{2}-\d{2}$/.test(s))fail(400,'Ngày không hợp lệ.');const d=new Date(`${s}T00:00:00Z`);if(Number.isNaN(d.getTime())||d.toISOString().slice(0,10)!==s)fail(400,'Ngày không hợp lệ.');return s;}
 function dateTime(v){const s=text(v,19).trim(),m=/^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/.exec(s);if(!m)fail(400,'Giờ cảng không hợp lệ.');dateOnly(m[1]);if(Number(m[2])>23||Number(m[3])>59||Number(m[4]||0)>59)fail(400,'Giờ cảng không hợp lệ.');return `${m[1]}T${m[2]}:${m[3]}:${m[4]||'00'}`;}
 async function requestJson(req){let raw='';for await(const chunk of req){raw+=chunk;if(raw.length>20000)fail(413,'Yêu cầu quá lớn.');}let body;try{body=JSON.parse(raw||'{}');}catch{fail(400,'JSON không hợp lệ.');}if(!body||typeof body!=='object'||Array.isArray(body))fail(400,'Dữ liệu gửi lên không hợp lệ.');return body;}
