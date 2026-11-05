@@ -5,7 +5,7 @@ import {randomBytes} from 'node:crypto';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {query,jsonQuery,literal,verifyPassword,hashPassword} from './src/db.mjs';
-import {parseAmount,parseId,parseOptionalId,parseText,parseWhole} from './src/validation.mjs';
+import {parseAmount,parseBoolean,parseId,parseOptionalId,parseText,parseWhole} from './src/validation.mjs';
 import QRCode from 'qrcode';
 const root=fileURLToPath(new URL('./public/',import.meta.url));
 const port=Number(process.env.PORT||3001),cookieName='aurora_week1',reminderIntervalSeconds=Number(process.env.SHORE_REMINDER_INTERVAL_SECONDS||60);
@@ -17,6 +17,7 @@ const id=v=>parseId(v);
 const maybeId=v=>parseOptionalId(v);
 const whole=(v,min,max,label='Số')=>parseWhole(v,min,max,label);
 const amount=(v,label='Số tiền')=>parseAmount(v,label);
+const boolean=(v,label='Trạng thái',defaultValue)=>v===undefined&&defaultValue!==undefined?defaultValue:parseBoolean(v,label);
 const text=(v,max)=>{const value=parseText(v,max);if(!value.trim())fail(400,'Dữ liệu không hợp lệ.');return value;};
 function dateOnly(v){const s=text(v,10).trim();if(!/^\d{4}-\d{2}-\d{2}$/.test(s))fail(400,'Ngày không hợp lệ.');const d=new Date(`${s}T00:00:00Z`);if(Number.isNaN(d.getTime())||d.toISOString().slice(0,10)!==s)fail(400,'Ngày không hợp lệ.');return s;}
 function dateTime(v){const s=text(v,19).trim(),m=/^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/.exec(s);if(!m)fail(400,'Giờ cảng không hợp lệ.');dateOnly(m[1]);if(Number(m[2])>23||Number(m[3])>59||Number(m[4]||0)>59)fail(400,'Giờ cảng không hợp lệ.');return `${m[1]}T${m[2]}:${m[3]}:${m[4]||'00'}`;}
@@ -291,11 +292,11 @@ const server=http.createServer(async(req,res)=>{
    }
    if(req.method==='POST'&&url.pathname.startsWith('/api/shore/')){
     requireRoles(u,'SHORE');const b=await requestJson(req),path=url.pathname;
-    if(path==='/api/shore/providers'){const providerId=maybeId(b.providerId),name=text(b.name,100).trim(),contactName=b.contactName?text(b.contactName,100).trim():null,phone=b.phone?text(b.phone,30).trim():null,email=b.email?text(b.email,150).trim():null,active=b.active!==false;await runProcedure(`EXEC dbo.usp_SaveShoreProvider @ActorId=${u.UserId},@ProviderId=${providerId},@Name=${literal(name)},@ContactName=${literal(contactName)},@Phone=${literal(phone)},@Email=${literal(email)},@Active=${active?1:0};`);return send(providerId?200:201,{ok:true});}
-    if(path==='/api/shore/vehicles'){const vehicleId=maybeId(b.vehicleId),providerId=id(b.providerId),name=text(b.name,100).trim(),plateNumber=b.plateNumber?text(b.plateNumber,30).trim():null,capacity=whole(b.capacity,1,1000,'Sức chứa xe'),active=b.active!==false;await runProcedure(`EXEC dbo.usp_SaveShoreVehicle @ActorId=${u.UserId},@VehicleId=${vehicleId},@ProviderId=${providerId},@Name=${literal(name)},@PlateNumber=${literal(plateNumber)},@Capacity=${capacity},@Active=${active?1:0};`);return send(vehicleId?200:201,{ok:true});}
-    if(path==='/api/shore/guides'){const guideId=maybeId(b.guideId),providerId=id(b.providerId),name=text(b.name,100).trim(),phone=b.phone?text(b.phone,30).trim():null,active=b.active!==false;await runProcedure(`EXEC dbo.usp_SaveShoreGuide @ActorId=${u.UserId},@GuideId=${guideId},@ProviderId=${providerId},@Name=${literal(name)},@Phone=${literal(phone)},@Active=${active?1:0};`);return send(guideId?200:201,{ok:true});}
+    if(path==='/api/shore/providers'){const providerId=maybeId(b.providerId),name=text(b.name,100).trim(),contactName=b.contactName?text(b.contactName,100).trim():null,phone=b.phone?text(b.phone,30).trim():null,email=b.email?text(b.email,150).trim():null,active=boolean(b.active,'Trạng thái nhà cung cấp',true);await runProcedure(`EXEC dbo.usp_SaveShoreProvider @ActorId=${u.UserId},@ProviderId=${providerId},@Name=${literal(name)},@ContactName=${literal(contactName)},@Phone=${literal(phone)},@Email=${literal(email)},@Active=${active?1:0};`);return send(providerId?200:201,{ok:true});}
+    if(path==='/api/shore/vehicles'){const vehicleId=maybeId(b.vehicleId),providerId=id(b.providerId),name=text(b.name,100).trim(),plateNumber=b.plateNumber?text(b.plateNumber,30).trim():null,capacity=whole(b.capacity,1,1000,'Sức chứa xe'),active=boolean(b.active,'Trạng thái xe',true);await runProcedure(`EXEC dbo.usp_SaveShoreVehicle @ActorId=${u.UserId},@VehicleId=${vehicleId},@ProviderId=${providerId},@Name=${literal(name)},@PlateNumber=${literal(plateNumber)},@Capacity=${capacity},@Active=${active?1:0};`);return send(vehicleId?200:201,{ok:true});}
+    if(path==='/api/shore/guides'){const guideId=maybeId(b.guideId),providerId=id(b.providerId),name=text(b.name,100).trim(),phone=b.phone?text(b.phone,30).trim():null,active=boolean(b.active,'Trạng thái hướng dẫn viên',true);await runProcedure(`EXEC dbo.usp_SaveShoreGuide @ActorId=${u.UserId},@GuideId=${guideId},@ProviderId=${providerId},@Name=${literal(name)},@Phone=${literal(phone)},@Active=${active?1:0};`);return send(guideId?200:201,{ok:true});}
     if(path==='/api/shore/excursions'){const activityId=maybeId(b.activityId),cruiseId=id(b.cruiseId),stopId=id(b.stopId),providerId=id(b.providerId),name=text(b.name,150).trim(),gatherAt=dateTime(b.gatherAt),returnAt=dateTime(b.returnAt),capacity=whole(b.capacity,1,100000,'Sức chứa'),fee=amount(b.fee,'Phí'),status=text(b.status||'OPEN',20).trim().toUpperCase();if(returnAt<=gatherAt)fail(400,'Giờ về tàu phải sau giờ tập trung.');await runProcedure(`EXEC dbo.usp_SaveShoreExcursion @ActorId=${u.UserId},@ActivityId=${activityId},@CruiseId=${cruiseId},@StopId=${stopId},@ProviderId=${providerId},@Name=${literal(name)},@GatherAt=${literal(gatherAt)},@ReturnAt=${literal(returnAt)},@Capacity=${capacity},@Fee=${fee},@Status=${literal(status)};`);return send(activityId?200:201,{ok:true});}
-    if(path==='/api/shore/groups'){const groupId=maybeId(b.groupId),activityId=id(b.activityId),name=text(b.name,100).trim(),vehicleId=maybeId(b.vehicleId),guideId=maybeId(b.guideId),capacity=whole(b.capacity,1,100000,'Sức chứa nhóm'),active=b.active!==false;await runProcedure(`EXEC dbo.usp_SaveExcursionGroup @ActorId=${u.UserId},@GroupId=${groupId},@ActivityId=${activityId},@Name=${literal(name)},@VehicleId=${vehicleId||null},@GuideId=${guideId||null},@Capacity=${capacity},@Active=${active?1:0};`);return send(groupId?200:201,{ok:true});}
+    if(path==='/api/shore/groups'){const groupId=maybeId(b.groupId),activityId=id(b.activityId),name=text(b.name,100).trim(),vehicleId=maybeId(b.vehicleId),guideId=maybeId(b.guideId),capacity=whole(b.capacity,1,100000,'Sức chứa nhóm'),active=boolean(b.active,'Trạng thái nhóm',true);await runProcedure(`EXEC dbo.usp_SaveExcursionGroup @ActorId=${u.UserId},@GroupId=${groupId},@ActivityId=${activityId},@Name=${literal(name)},@VehicleId=${vehicleId||null},@GuideId=${guideId||null},@Capacity=${capacity},@Active=${active?1:0};`);return send(groupId?200:201,{ok:true});}
     if(path==='/api/shore/assignments'){const registrationId=id(b.registrationId),groupId=maybeId(b.groupId);await runProcedure(`EXEC dbo.usp_AssignExcursionGuest @ActorId=${u.UserId},@RegistrationId=${registrationId},@GroupId=${groupId||null};`);return send(200,{ok:true});}
    }   if(req.method==='POST'&&url.pathname==='/api/activity/services'){
      requireRoles(u,'ACTIVITY');const b=await requestJson(req),serviceId=maybeId(b.serviceId),name=text(b.name,100).trim(),price=amount(b.price,'Giá dịch vụ');
@@ -336,11 +337,11 @@ const server=http.createServer(async(req,res)=>{
    }
    if(req.method==='POST'&&url.pathname==='/api/admin/users'){
     requireRoles(u,'ADMIN');const b=await requestJson(req),userId=maybeId(b.userId),name=text(b.name,100).trim(),email=text(b.email,150).trim().toLowerCase();
-    if(typeof b.active!=='boolean')fail(400,'Trạng thái tài khoản không hợp lệ.');
+    const active=boolean(b.active,'Trạng thái tài khoản');
     if(!Array.isArray(b.roles)||!b.roles.length||b.roles.length>Object.keys(roles).length||b.roles.some(r=>typeof r!=='string'||!Object.hasOwn(roles,r))||new Set(b.roles).size!==b.roles.length)fail(400,'Danh sách vai trò không hợp lệ.');
     let passwordHash=null;if(b.password!==undefined&&b.password!==''){const password=text(b.password,100);if(password.length<8)fail(400,'Mật khẩu phải có ít nhất 8 ký tự.');passwordHash=hashPassword(password);}
     if(userId===0&&!passwordHash)fail(400,'Người dùng mới phải có mật khẩu.');
-    await runProcedure(`EXEC dbo.usp_AdminSaveUser @ActorId=${u.UserId},@UserId=${userId},@Name=${literal(name)},@Email=${literal(email)},@Active=${b.active?1:0},@RoleCodes=${literal(b.roles.join(','))},@PasswordHash=${literal(passwordHash)};`);
+    await runProcedure(`EXEC dbo.usp_AdminSaveUser @ActorId=${u.UserId},@UserId=${userId},@Name=${literal(name)},@Email=${literal(email)},@Active=${active?1:0},@RoleCodes=${literal(b.roles.join(','))},@PasswordHash=${literal(passwordHash)};`);
     const saved=(await jsonQuery(`SELECT u.UserId,u.Name,u.Email,u.Active,JSON_QUERY((SELECT r.Code FROM UserRoles ur JOIN Roles r ON r.RoleId=ur.RoleId WHERE ur.UserId=u.UserId FOR JSON PATH)) AS roles FROM Users u WHERE u.Email=${literal(email)} FOR JSON PATH`))[0];
     const currentSession=sessionId(req);for(const [sid,session] of sessions)if(session.userId===saved.UserId&&sid!==currentSession)sessions.delete(sid);
     return send(userId===0?201:200,saved);
@@ -358,8 +359,8 @@ const server=http.createServer(async(req,res)=>{
     return send(bookingId===0?201:200,{ok:true});
    }
    if(req.method==='POST'&&url.pathname==='/api/admin/package-services'){
-    requireRoles(u,'ADMIN');const b=await requestJson(req);if(typeof b.included!=='boolean')fail(400,'Trạng thái dịch vụ trong gói không hợp lệ.');
-    await runProcedure(`EXEC dbo.usp_AdminPackageService @ActorId=${u.UserId},@PackageId=${id(b.packageId)},@ServiceId=${id(b.serviceId)},@Included=${b.included?1:0};`);return send(200,{ok:true});
+    requireRoles(u,'ADMIN');const b=await requestJson(req),included=boolean(b.included,'Trạng thái dịch vụ trong gói');
+    await runProcedure(`EXEC dbo.usp_AdminPackageService @ActorId=${u.UserId},@PackageId=${id(b.packageId)},@ServiceId=${id(b.serviceId)},@Included=${included?1:0};`);return send(200,{ok:true});
    }
    if(req.method==='POST'&&url.pathname==='/api/admin/policy'){
     requireRoles(u,'ADMIN');const b=await requestJson(req),cancelHours=whole(b.cancelHours,0,8760,'Số giờ hủy'),refundPercent=whole(b.refundPercent,0,100,'Tỷ lệ hoàn phí');
@@ -367,8 +368,8 @@ const server=http.createServer(async(req,res)=>{
    }
    const identifierMatch=/^\/api\/admin\/identifiers\/(\d+)\/active$/.exec(url.pathname);
    if(req.method==='POST'&&identifierMatch){
-    requireRoles(u,'ADMIN');const b=await requestJson(req);if(typeof b.active!=='boolean')fail(400,'Trạng thái mã định danh không hợp lệ.');
-    await runProcedure(`EXEC dbo.usp_AdminSetIdentifierActive @ActorId=${u.UserId},@IdentifierId=${id(identifierMatch[1])},@Active=${b.active?1:0};`);return send(200,{ok:true});
+    requireRoles(u,'ADMIN');const b=await requestJson(req),active=boolean(b.active,'Trạng thái mã định danh');
+    await runProcedure(`EXEC dbo.usp_AdminSetIdentifierActive @ActorId=${u.UserId},@IdentifierId=${id(identifierMatch[1])},@Active=${active?1:0};`);return send(200,{ok:true});
    }
    if(req.method==='POST'&&url.pathname==='/api/feedback'){
     requireRoles(u,'PASSENGER');const b=await requestJson(req),kind=typeof b.kind==='string'?b.kind.toUpperCase():'';
