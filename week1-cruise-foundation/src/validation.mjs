@@ -23,7 +23,9 @@ export function parseId(value, label = 'ID') {
 
 export function parseOptionalId(value, label = 'ID') {
   if (value === undefined || value === null || value === '') return 0;
-  return integerValue(value, label);
+  const parsed = integerValue(value, label);
+  if (parsed < 0) throw new InputValidationError(`${label} không hợp lệ.`);
+  return parsed;
 }
 
 export function parseWhole(value, min, max, label = 'Số') {
