@@ -1,9 +1,15 @@
 // Tách từ cruise-sql/src/db.mjs: sqlcmd, JSON Unicode và mật khẩu scrypt.
 import {spawn} from 'node:child_process';
 import {randomBytes,scryptSync,timingSafeEqual} from 'node:crypto';
+import {parseText} from './validation.mjs';
 export const database=process.env.SQL_DATABASE||'CruiseWeek1';
 if(!/^[A-Za-z][A-Za-z0-9_]{0,100}$/.test(database))throw Error('Tên SQL_DATABASE không hợp lệ.');
-export const literal=v=>v===null?'NULL':typeof v==='number'&&Number.isFinite(v)?String(v):`N'${String(v).replaceAll("'","''")}'`;
+export const literal=v=>{
+ if(v===null)return 'NULL';
+ if(typeof v==='number'){if(!Number.isFinite(v))throw new TypeError('SQL numeric literal must be finite.');return String(v);}
+ if(typeof v!=='string')throw new TypeError('SQL literal must be a string, finite number, or null.');
+ return `N'${parseText(v,Number.MAX_SAFE_INTEGER,'Chuỗi SQL').replaceAll("'","''")}'`;
+};
 export function hashPassword(password){const salt=randomBytes(16).toString('hex');return salt+':'+scryptSync(password,salt,64).toString('hex');}
 export function verifyPassword(password,stored){if(typeof stored!=='string'||!/^[a-f0-9]{32}:[a-f0-9]{128}$/.test(stored))return false;const [salt,hash]=stored.split(':');return timingSafeEqual(scryptSync(password,salt,64),Buffer.from(hash,'hex'));}
 export function query(sql){return new Promise((resolve,reject)=>{

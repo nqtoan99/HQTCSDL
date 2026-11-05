@@ -6,6 +6,7 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {query,jsonQuery,literal,verifyPassword,hashPassword} from './src/db.mjs';
 import {parseAmount,parseBoolean,parseId,parseOptionalId,parseText,parseWhole} from './src/validation.mjs';
+import {readJsonBody} from './src/json-body.mjs';
 import QRCode from 'qrcode';
 const root=fileURLToPath(new URL('./public/',import.meta.url));
 const port=Number(process.env.PORT||3001),cookieName='aurora_week1',reminderIntervalSeconds=Number(process.env.SHORE_REMINDER_INTERVAL_SECONDS||60);
@@ -21,7 +22,7 @@ const boolean=(v,label='Trạng thái',defaultValue)=>v===undefined&&defaultValu
 const text=(v,max)=>{const value=parseText(v,max);if(!value.trim())fail(400,'Dữ liệu không hợp lệ.');return value;};
 function dateOnly(v){const s=text(v,10).trim();if(!/^\d{4}-\d{2}-\d{2}$/.test(s))fail(400,'Ngày không hợp lệ.');const d=new Date(`${s}T00:00:00Z`);if(Number.isNaN(d.getTime())||d.toISOString().slice(0,10)!==s)fail(400,'Ngày không hợp lệ.');return s;}
 function dateTime(v){const s=text(v,19).trim(),m=/^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/.exec(s);if(!m)fail(400,'Giờ cảng không hợp lệ.');dateOnly(m[1]);if(Number(m[2])>23||Number(m[3])>59||Number(m[4]||0)>59)fail(400,'Giờ cảng không hợp lệ.');return `${m[1]}T${m[2]}:${m[3]}:${m[4]||'00'}`;}
-async function requestJson(req){let raw='';for await(const chunk of req){raw+=chunk;if(raw.length>20000)fail(413,'Yêu cầu quá lớn.');}let body;try{body=JSON.parse(raw||'{}');}catch{fail(400,'JSON không hợp lệ.');}if(!body||typeof body!=='object'||Array.isArray(body))fail(400,'Dữ liệu gửi lên không hợp lệ.');return body;}
+async function requestJson(req){return readJsonBody(req);}
 async function runProcedure(sql){try{return await query(sql);}catch(e){const message=String(e.message||'');const match=/Msg \d+, Level 16,[\s\S]*?Line \d+\s*\r?\n([^\r\n]+)/.exec(message);if(match)fail(422,match[1].trim());throw e;}}
 const sessionId=req=>new RegExp(`(?:^|;\\s*)${cookieName}=([a-f0-9]{64})(?:;|$)`).exec(req.headers.cookie||'')?.[1];
 function requireRoles(u,...allowed){if(!u.roles.includes('ADMIN')&&!allowed.some(r=>u.roles.includes(r)))fail(403,'Không có quyền truy cập chức năng này.');}
