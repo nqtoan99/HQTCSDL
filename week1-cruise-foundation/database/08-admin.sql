@@ -18,8 +18,6 @@ BEGIN
  SET XACT_ABORT ON;
  BEGIN TRY
   BEGIN TRAN;
-  DECLARE @UserAction varchar(10)=CASE WHEN @UserId=0 THEN 'INSERT' ELSE 'UPDATE' END;
-
   IF NOT EXISTS(
    SELECT 1 FROM dbo.Users actor JOIN dbo.UserRoles ur ON ur.UserId=actor.UserId
    JOIN dbo.Roles r ON r.RoleId=ur.RoleId
@@ -84,8 +82,6 @@ BEGIN
   IF EXISTS(SELECT 1 FROM @RequestedRoles WHERE Code='PASSENGER')
    AND NOT EXISTS(SELECT 1 FROM dbo.Passengers WHERE UserId=@UserId)
    INSERT dbo.Passengers(UserId) VALUES(@UserId);
-
-  INSERT dbo.AuditLog(Entity,EntityId,Action,ActorId) VALUES('User',@UserId,@UserAction,@ActorId);
 
   COMMIT;
   SELECT @UserId AS UserId;
@@ -216,14 +212,13 @@ BEGIN
   THROW 51314,N'Gói hoặc dịch vụ không tồn tại.',1;
  BEGIN TRY
   BEGIN TRAN;
-  DECLARE @Changed bit=0,@CorrelationId uniqueidentifier=NEWID();
+  DECLARE @CorrelationId uniqueidentifier=NEWID();
   EXEC sys.sp_set_session_context @key=N'ActorId',@value=@ActorId;
   EXEC sys.sp_set_session_context @key=N'CorrelationId',@value=@CorrelationId;
   IF @Included=1 AND NOT EXISTS(SELECT 1 FROM dbo.PackageServices WITH(UPDLOCK,HOLDLOCK) WHERE PackageId=@PackageId AND ServiceId=@ServiceId)
-  BEGIN INSERT dbo.PackageServices(PackageId,ServiceId) VALUES(@PackageId,@ServiceId); SET @Changed=1; END
+  BEGIN INSERT dbo.PackageServices(PackageId,ServiceId) VALUES(@PackageId,@ServiceId); END
   ELSE IF @Included=0
-  BEGIN DELETE dbo.PackageServices WHERE PackageId=@PackageId AND ServiceId=@ServiceId; IF @@ROWCOUNT=1 SET @Changed=1; END
-  IF @Changed=1 INSERT dbo.AuditLog(Entity,EntityId,Action,ActorId) VALUES('PackageService',@PackageId,CASE WHEN @Included=1 THEN 'INSERT' ELSE 'DELETE' END,@ActorId);
+  BEGIN DELETE dbo.PackageServices WHERE PackageId=@PackageId AND ServiceId=@ServiceId; END
   COMMIT;
  END TRY BEGIN CATCH IF @@TRANCOUNT>0 ROLLBACK; THROW; END CATCH
 END;
@@ -245,7 +240,6 @@ BEGIN
   EXEC sys.sp_set_session_context @key=N'CorrelationId',@value=@CorrelationId;
   UPDATE dbo.Policy SET CancelHours=@CancelHours,RefundPercent=@RefundPercent WHERE PolicyId=1;
   IF @@ROWCOUNT=0 THROW 51321,N'Chính sách hủy chưa được khởi tạo.',1;
-  INSERT dbo.AuditLog(Entity,EntityId,Action,ActorId) VALUES('Policy',1,'UPDATE',@ActorId);
   COMMIT;
  END TRY BEGIN CATCH IF @@TRANCOUNT>0 ROLLBACK; THROW; END CATCH
 END;

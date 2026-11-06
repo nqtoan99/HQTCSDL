@@ -84,6 +84,85 @@ BEGIN
 END;
 GO
 
+CREATE OR ALTER TRIGGER dbo.tr_UserAudit ON dbo.Users AFTER INSERT,UPDATE,DELETE AS
+BEGIN
+ SET NOCOUNT ON;
+ INSERT dbo.AuditLog(Entity,EntityId,Action,ActorId,Details,CorrelationId)
+ SELECT 'User',COALESCE(i.UserId,d.UserId),
+  CASE WHEN d.UserId IS NULL THEN 'INSERT' WHEN i.UserId IS NULL THEN 'DELETE' ELSE 'UPDATE' END,
+  TRY_CONVERT(int,SESSION_CONTEXT(N'ActorId')),
+  CONCAT(N'Name=',COALESCE(i.Name,d.Name),N'; Email=',COALESCE(i.Email,d.Email),N'; Active=',COALESCE(i.Active,d.Active)),
+  COALESCE(TRY_CONVERT(uniqueidentifier,SESSION_CONTEXT(N'CorrelationId')),NEWID())
+ FROM inserted i FULL JOIN deleted d ON d.UserId=i.UserId;
+END;
+GO
+
+CREATE OR ALTER TRIGGER dbo.tr_UserRoleAudit ON dbo.UserRoles AFTER INSERT,DELETE AS
+BEGIN
+ SET NOCOUNT ON;
+ INSERT dbo.AuditLog(Entity,EntityId,Action,ActorId,Details,CorrelationId)
+ SELECT 'UserRole',i.UserId,'INSERT',TRY_CONVERT(int,SESSION_CONTEXT(N'ActorId')),
+  CONCAT(N'RoleId=',i.RoleId),COALESCE(TRY_CONVERT(uniqueidentifier,SESSION_CONTEXT(N'CorrelationId')),NEWID())
+ FROM inserted i
+ UNION ALL
+ SELECT 'UserRole',d.UserId,'DELETE',TRY_CONVERT(int,SESSION_CONTEXT(N'ActorId')),
+  CONCAT(N'RoleId=',d.RoleId),COALESCE(TRY_CONVERT(uniqueidentifier,SESSION_CONTEXT(N'CorrelationId')),NEWID())
+ FROM deleted d;
+END;
+GO
+
+CREATE OR ALTER TRIGGER dbo.tr_PackageServiceAudit ON dbo.PackageServices AFTER INSERT,DELETE AS
+BEGIN
+ SET NOCOUNT ON;
+ INSERT dbo.AuditLog(Entity,EntityId,Action,ActorId,Details,CorrelationId)
+ SELECT 'PackageService',i.PackageId,'INSERT',TRY_CONVERT(int,SESSION_CONTEXT(N'ActorId')),
+  CONCAT(N'ServiceId=',i.ServiceId),COALESCE(TRY_CONVERT(uniqueidentifier,SESSION_CONTEXT(N'CorrelationId')),NEWID())
+ FROM inserted i
+ UNION ALL
+ SELECT 'PackageService',d.PackageId,'DELETE',TRY_CONVERT(int,SESSION_CONTEXT(N'ActorId')),
+  CONCAT(N'ServiceId=',d.ServiceId),COALESCE(TRY_CONVERT(uniqueidentifier,SESSION_CONTEXT(N'CorrelationId')),NEWID())
+ FROM deleted d;
+END;
+GO
+
+CREATE OR ALTER TRIGGER dbo.tr_PolicyAudit ON dbo.Policy AFTER UPDATE AS
+BEGIN
+ SET NOCOUNT ON;
+ INSERT dbo.AuditLog(Entity,EntityId,Action,ActorId,Details,CorrelationId)
+ SELECT 'Policy',i.PolicyId,'UPDATE',TRY_CONVERT(int,SESSION_CONTEXT(N'ActorId')),
+  CONCAT(N'CancelHours=',d.CancelHours,N'→',i.CancelHours,N'; RefundPercent=',d.RefundPercent,N'→',i.RefundPercent),
+  COALESCE(TRY_CONVERT(uniqueidentifier,SESSION_CONTEXT(N'CorrelationId')),NEWID())
+ FROM inserted i JOIN deleted d ON d.PolicyId=i.PolicyId
+ WHERE i.CancelHours<>d.CancelHours OR i.RefundPercent<>d.RefundPercent;
+END;
+GO
+
+CREATE OR ALTER TRIGGER dbo.tr_RegistrationAudit ON dbo.Registrations AFTER INSERT,UPDATE,DELETE AS
+BEGIN
+ SET NOCOUNT ON;
+ INSERT dbo.AuditLog(Entity,EntityId,Action,ActorId,Details,CorrelationId)
+ SELECT 'Registration',COALESCE(i.RegistrationId,d.RegistrationId),
+  CASE WHEN d.RegistrationId IS NULL THEN 'INSERT' WHEN i.RegistrationId IS NULL THEN 'DELETE' ELSE 'UPDATE' END,
+  TRY_CONVERT(int,SESSION_CONTEXT(N'ActorId')),
+  CONCAT(N'Activity=',COALESCE(i.ActivityId,d.ActivityId),N'; Booking=',COALESCE(i.BookingId,d.BookingId),N'; Status=',COALESCE(i.Status,d.Status)),
+  COALESCE(TRY_CONVERT(uniqueidentifier,SESSION_CONTEXT(N'CorrelationId')),NEWID())
+ FROM inserted i FULL JOIN deleted d ON d.RegistrationId=i.RegistrationId;
+END;
+GO
+
+CREATE OR ALTER TRIGGER dbo.tr_TransactionAudit ON dbo.Transactions AFTER INSERT,UPDATE,DELETE AS
+BEGIN
+ SET NOCOUNT ON;
+ INSERT dbo.AuditLog(Entity,EntityId,Action,ActorId,Details,CorrelationId)
+ SELECT 'Transaction',COALESCE(i.TransactionId,d.TransactionId),
+  CASE WHEN d.TransactionId IS NULL THEN 'INSERT' WHEN i.TransactionId IS NULL THEN 'DELETE' ELSE 'UPDATE' END,
+  TRY_CONVERT(int,SESSION_CONTEXT(N'ActorId')),
+  CONCAT(N'Account=',COALESCE(i.AccountId,d.AccountId),N'; Status=',COALESCE(i.Status,d.Status),N'; Amount=',COALESCE(i.Amount,d.Amount)),
+  COALESCE(TRY_CONVERT(uniqueidentifier,SESSION_CONTEXT(N'CorrelationId')),NEWID())
+ FROM inserted i FULL JOIN deleted d ON d.TransactionId=i.TransactionId;
+END;
+GO
+
 IF NOT EXISTS(SELECT 1 FROM sys.indexes WHERE object_id=OBJECT_ID('dbo.Bookings') AND name='IX_Bookings_CruiseCabin')
  CREATE INDEX IX_Bookings_CruiseCabin ON dbo.Bookings(CruiseId,CabinId) INCLUDE(PassengerId,PackageId);
 IF NOT EXISTS(SELECT 1 FROM sys.indexes WHERE object_id=OBJECT_ID('dbo.Transactions') AND name='IX_Transactions_RegistrationAccount')
@@ -102,6 +181,28 @@ BEGIN
   JOIN dbo.Cabins cb ON cb.CabinId=b.CabinId
   WHERE cb.ShipId<>c.ShipId
  ) THROW 51330,N'Cabin phải thuộc tàu của chuyến trong booking.',1;
+END;
+GO
+
+CREATE OR ALTER TRIGGER dbo.tr_ZoneParentConsistency ON dbo.Zones AFTER UPDATE AS
+BEGIN
+ SET NOCOUNT ON;
+ IF EXISTS(
+  SELECT 1 FROM inserted z JOIN deleted old ON old.ZoneId=z.ZoneId
+  JOIN dbo.Activities a ON a.ZoneId=z.ZoneId JOIN dbo.Cruises c ON c.CruiseId=a.CruiseId
+  WHERE z.ShipId<>old.ShipId AND z.ShipId<>c.ShipId
+ ) THROW 51347,N'Không thể chuyển khu vực sang tàu khác khi đang có hoạt động của chuyến cũ.',1;
+END;
+GO
+
+CREATE OR ALTER TRIGGER dbo.tr_CabinParentConsistency ON dbo.Cabins AFTER UPDATE AS
+BEGIN
+ SET NOCOUNT ON;
+ IF EXISTS(
+  SELECT 1 FROM inserted cb JOIN deleted old ON old.CabinId=cb.CabinId
+  JOIN dbo.Bookings b ON b.CabinId=cb.CabinId JOIN dbo.Cruises c ON c.CruiseId=b.CruiseId
+  WHERE cb.ShipId<>old.ShipId AND cb.ShipId<>c.ShipId
+ ) THROW 51348,N'Không thể chuyển cabin sang tàu khác khi đang có booking của chuyến cũ.',1;
 END;
 GO
 
@@ -124,13 +225,37 @@ BEGIN
  SET NOCOUNT ON;
  IF EXISTS(
   SELECT 1 FROM inserted t
+  LEFT JOIN deleted old ON old.TransactionId=t.TransactionId
   JOIN dbo.Accounts ac ON ac.AccountId=t.AccountId
   LEFT JOIN dbo.Registrations r ON r.RegistrationId=t.RegistrationId
   LEFT JOIN dbo.Devices d ON d.DeviceId=t.DeviceId
   WHERE ac.Status<>'OPEN'
      OR (t.RegistrationId IS NOT NULL AND ac.BookingId<>r.BookingId)
      OR (t.ServiceId IS NOT NULL AND d.Kind<>'POS')
+     OR (t.ServiceId IS NOT NULL AND (old.TransactionId IS NULL OR ISNULL(old.StaffId,-1)<>ISNULL(t.StaffId,-1)) AND NOT EXISTS(
+      SELECT 1 FROM dbo.Users staff JOIN dbo.UserRoles ur ON ur.UserId=staff.UserId JOIN dbo.Roles role ON role.RoleId=ur.RoleId
+      WHERE staff.UserId=t.StaffId AND staff.Active=1 AND role.Code IN('POS','ADMIN')
+     ))
  ) THROW 51332,N'Giao dịch không khớp booking, thiết bị POS hoặc tài khoản đã chốt.',1;
+END;
+GO
+
+CREATE OR ALTER TRIGGER dbo.tr_CheckInConsistency ON dbo.CheckIns AFTER INSERT,UPDATE AS
+BEGIN
+ SET NOCOUNT ON;
+ IF EXISTS(
+  SELECT 1 FROM inserted ci LEFT JOIN deleted old ON old.CheckInId=ci.CheckInId
+  JOIN dbo.Registrations r ON r.RegistrationId=ci.RegistrationId
+  JOIN dbo.Activities a ON a.ActivityId=r.ActivityId
+  JOIN dbo.Devices d ON d.DeviceId=ci.DeviceId
+  WHERE d.Kind<>'CHECKIN'
+     OR (old.CheckInId IS NULL AND r.Status<>'CONFIRMED')
+     OR ((old.CheckInId IS NULL OR ISNULL(old.StaffId,-1)<>ci.StaffId) AND NOT EXISTS(
+      SELECT 1 FROM dbo.Users staff JOIN dbo.UserRoles ur ON ur.UserId=staff.UserId JOIN dbo.Roles role ON role.RoleId=ur.RoleId
+      WHERE staff.UserId=ci.StaffId AND staff.Active=1
+        AND role.Code IN('ADMIN',CASE WHEN a.Kind='SHORE' THEN 'SHORE' ELSE 'ACTIVITY' END)
+     ))
+ ) THROW 51349,N'Check-in không khớp đăng ký, thiết bị hoặc quyền nhân viên.',1;
 END;
 GO
 
@@ -220,11 +345,27 @@ BEGIN
  SELECT @Violations=@Violations+COUNT(*)
  FROM dbo.Transactions t JOIN dbo.Accounts ac ON ac.AccountId=t.AccountId
  LEFT JOIN dbo.Registrations r ON r.RegistrationId=t.RegistrationId
- WHERE t.RegistrationId IS NOT NULL AND ac.BookingId<>r.BookingId;
+ LEFT JOIN dbo.Devices d ON d.DeviceId=t.DeviceId
+ WHERE (t.RegistrationId IS NOT NULL AND ac.BookingId<>r.BookingId)
+    OR (t.ServiceId IS NOT NULL AND d.Kind<>'POS');
+ SELECT @Violations=@Violations+COUNT(*)
+ FROM dbo.CheckIns ci JOIN dbo.Devices d ON d.DeviceId=ci.DeviceId
+ WHERE d.Kind<>'CHECKIN';
+ SELECT @Violations=@Violations+COUNT(*)
+ FROM dbo.Invoices inv
+ OUTER APPLY(
+  SELECT CONVERT(decimal(18,2),COALESCE(SUM(CASE t.Status
+   WHEN 'POSTED' THEN t.Amount
+   WHEN 'REFUNDED' THEN t.Amount-COALESCE(t.RefundAmount,0)
+   ELSE 0 END),0)) ExpectedTotal
+  FROM dbo.Transactions t WHERE t.AccountId=inv.AccountId
+ ) x
+ WHERE inv.Total<>x.ExpectedTotal;
  SELECT @Violations=@Violations+COUNT(*)
  FROM dbo.Accounts ac LEFT JOIN dbo.Invoices inv ON inv.AccountId=ac.AccountId
  LEFT JOIN dbo.Payments p ON p.InvoiceId=inv.InvoiceId
- WHERE ac.Status='SETTLED' AND (inv.InvoiceId IS NULL OR p.PaymentId IS NULL OR p.Amount<>inv.Total);
+ WHERE ac.Status='SETTLED' AND (inv.InvoiceId IS NULL OR p.PaymentId IS NULL OR p.Amount<>inv.Total
+  OR UPPER(LTRIM(RTRIM(p.Method))) NOT IN('CASH','CARD','TRANSFER','MOCK'));
  IF @Violations>0 THROW 51340,N'Phát hiện dữ liệu chéo bảng không toàn vẹn.',1;
  SELECT @Violations AS ViolationCount;
 END;
