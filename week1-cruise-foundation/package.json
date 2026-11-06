@@ -14,7 +14,7 @@
   "scripts": {
     "setup": "node scripts/setup.mjs",
     "start": "node server.mjs",
-    "check": "node --check server.mjs && node --check src/db.mjs && node --check src/validation.mjs && node --check src/json-body.mjs && node --check public/app.js && node --check public/sw.js && node --check scripts/setup.mjs && node --check tests/admin.mjs && node --check tests/passenger-finance.mjs && node --check tests/data-apis.mjs && node --check tests/input-validation.mjs",
+    "check": "node --check server.mjs && node --check src/db.mjs && node --check src/validation.mjs && node --check src/json-body.mjs && node --check public/app.js && node --check public/sw.js && node --check scripts/setup.mjs && node --check tests/admin.mjs && node --check tests/integrity.mjs && node --check tests/passenger-finance.mjs && node --check tests/data-apis.mjs && node --check tests/input-validation.mjs",
     "test:auth": "node tests/auth.mjs",
     "test:admin": "node tests/admin.mjs",
     "test:integrity": "node tests/integrity.mjs",

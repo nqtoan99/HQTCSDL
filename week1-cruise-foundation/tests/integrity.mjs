@@ -41,16 +41,39 @@ try{
   ()=>query("UPDATE Activities SET CruiseId=(SELECT CruiseId FROM Cruises WHERE Name=N'Chuyến thử') WHERE ActivityId=1;"),
   'Hoạt động sai tàu không bị chặn.'
  ));
+ await check('Chặn chuyển khu vực đang dùng sang tàu khác',()=>reject(
+  ()=>query("UPDATE Zones SET ShipId=(SELECT ShipId FROM Ships WHERE Name=N'Tàu kiểm thử') WHERE ZoneId=1;"),
+  'Khu vực đang có hoạt động vẫn chuyển sang tàu khác.'
+ ));
+ await check('Chặn chuyển cabin đang dùng sang tàu khác',()=>reject(
+  ()=>query("UPDATE Cabins SET ShipId=(SELECT ShipId FROM Ships WHERE Name=N'Tàu kiểm thử') WHERE CabinId=1;"),
+  'Cabin đang có booking vẫn chuyển sang tàu khác.'
+ ));
 
  await query('EXEC dbo.usp_Register @BookingId=1,@ActivityId=1,@ActorId=6;');
  await check('Chặn giao dịch gắn sai tài khoản booking',()=>reject(
   ()=>query('UPDATE Transactions SET AccountId=2 WHERE RegistrationId=(SELECT RegistrationId FROM Registrations WHERE BookingId=1 AND ActivityId=1);'),
   'Giao dịch sai tài khoản không bị chặn.'
  ));
+ await check('Chặn nhân viên sai quyền ghi giao dịch POS',()=>reject(
+  ()=>query('INSERT Transactions(AccountId,ServiceId,DeviceId,StaffId,Amount) VALUES(2,1,1,3,1000);'),
+  'Nhân viên không có quyền POS vẫn ghi được giao dịch.'
+ ));
+ await check('Chặn check-in bằng thiết bị POS',()=>reject(
+  ()=>query('INSERT CheckIns(RegistrationId,DeviceId,StaffId) SELECT RegistrationId,1,3 FROM Registrations WHERE BookingId=1 AND ActivityId=1;'),
+  'Thiết bị POS vẫn ghi được check-in.'
+ ));
  await check('Chặn hóa đơn có tổng sai',()=>reject(
   ()=>query('INSERT Invoices(AccountId,Total) VALUES(2,123);'),
   'Hóa đơn sai tổng không bị chặn.'
  ));
+
+ await check('Audit trực tiếp user, gói và chính sách',async()=>{
+  const correlation='22222222-2222-4222-8222-222222222222';
+  await query(`EXEC sys.sp_set_session_context @key=N'ActorId',@value=1; EXEC sys.sp_set_session_context @key=N'CorrelationId',@value='${correlation}'; UPDATE Users SET Name=N'Hành khách audit' WHERE UserId=25; INSERT PackageServices(PackageId,ServiceId) VALUES(1,1); UPDATE Policy SET CancelHours=3 WHERE PolicyId=1;`);
+  const rows=await jsonQuery(`SELECT Entity,ActorId,Details,CorrelationId FROM AuditLog WHERE CorrelationId='${correlation}' FOR JSON PATH`);
+  assert.equal(rows.length,3);assert.equal(new Set(rows.map(row=>row.Entity)).size,3);assert(rows.every(row=>row.ActorId===1&&row.Details));
+ });
 
  await query("EXEC dbo.usp_SettleAccount @AccountId=1,@ActorId=1,@Method='MOCK';");
  await check('Chốt tài khoản tạo hóa đơn và thanh toán khớp',async()=>{
@@ -76,6 +99,9 @@ try{
  await check('Có đủ index cho truy vấn nghiệp vụ',async()=>{
   const rows=await jsonQuery("SELECT name FROM sys.indexes WHERE name IN('IX_AuditLog_EntityCreated','IX_AuditLog_Correlation','IX_Bookings_CruiseCabin','IX_Transactions_RegistrationAccount') FOR JSON PATH");
   assert.equal(rows.length,4);
+ });
+ await check('Kiểm tra tổng thể vẫn không có vi phạm',async()=>{
+  assert.equal((await query('EXEC dbo.usp_VerifyDataIntegrity;')).trim(),'0');
  });
  console.log(JSON.stringify({tests:checks,failures:0}));
 }finally{
