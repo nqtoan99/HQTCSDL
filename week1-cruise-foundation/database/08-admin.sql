@@ -18,10 +18,12 @@ BEGIN
  SET XACT_ABORT ON;
  BEGIN TRY
   BEGIN TRAN;
+  DECLARE @UserAction varchar(10)=CASE WHEN @UserId=0 THEN 'INSERT' ELSE 'UPDATE' END;
 
   IF NOT EXISTS(
-   SELECT 1 FROM dbo.UserRoles ur JOIN dbo.Roles r ON r.RoleId=ur.RoleId
-   WHERE ur.UserId=@ActorId AND r.Code='ADMIN'
+   SELECT 1 FROM dbo.Users actor JOIN dbo.UserRoles ur ON ur.UserId=actor.UserId
+   JOIN dbo.Roles r ON r.RoleId=ur.RoleId
+   WHERE actor.UserId=@ActorId AND actor.Active=1 AND r.Code='ADMIN'
   ) THROW 51280,N'Chỉ quản trị viên được thay đổi người dùng.',1;
   IF @Name IS NULL OR LEN(LTRIM(RTRIM(@Name)))=0 OR LEN(@Name)>100
    THROW 51281,N'Tên người dùng không hợp lệ.',1;
@@ -70,7 +72,9 @@ BEGIN
    WHERE UserId=@UserId;
   END
 
+  DECLARE @CorrelationId uniqueidentifier=NEWID();
   EXEC sys.sp_set_session_context @key=N'ActorId',@value=@ActorId;
+  EXEC sys.sp_set_session_context @key=N'CorrelationId',@value=@CorrelationId;
   DELETE ur FROM dbo.UserRoles ur WHERE ur.UserId=@UserId
    AND NOT EXISTS(SELECT 1 FROM @RequestedRoles rr JOIN dbo.Roles r ON r.Code=rr.Code WHERE r.RoleId=ur.RoleId);
   INSERT dbo.UserRoles(UserId,RoleId)
@@ -80,6 +84,8 @@ BEGIN
   IF EXISTS(SELECT 1 FROM @RequestedRoles WHERE Code='PASSENGER')
    AND NOT EXISTS(SELECT 1 FROM dbo.Passengers WHERE UserId=@UserId)
    INSERT dbo.Passengers(UserId) VALUES(@UserId);
+
+  INSERT dbo.AuditLog(Entity,EntityId,Action,ActorId) VALUES('User',@UserId,@UserAction,@ActorId);
 
   COMMIT;
   SELECT @UserId AS UserId;
@@ -98,7 +104,7 @@ CREATE OR ALTER PROCEDURE dbo.usp_AdminSaveCatalog
 AS
 BEGIN
  SET NOCOUNT ON; SET XACT_ABORT ON;
- IF NOT EXISTS(SELECT 1 FROM dbo.UserRoles ur JOIN dbo.Roles r ON r.RoleId=ur.RoleId WHERE ur.UserId=@ActorId AND (r.Code='ADMIN' OR (r.Code='ACTIVITY' AND @Entity='service')))
+ IF NOT EXISTS(SELECT 1 FROM dbo.Users actor JOIN dbo.UserRoles ur ON ur.UserId=actor.UserId JOIN dbo.Roles r ON r.RoleId=ur.RoleId WHERE actor.UserId=@ActorId AND actor.Active=1 AND (r.Code='ADMIN' OR (r.Code='ACTIVITY' AND @Entity='service')))
   THROW 51280,N'Chỉ quản trị viên được thay đổi danh mục.',1;
  IF @Entity NOT IN('ship','zone','cabin','port','provider','service','package','device')
   THROW 51292,N'Danh mục không được hỗ trợ.',1;
@@ -106,6 +112,9 @@ BEGIN
   THROW 51293,N'Tên danh mục không hợp lệ.',1;
  BEGIN TRY
   BEGIN TRAN;
+  DECLARE @CorrelationId uniqueidentifier=NEWID();
+  EXEC sys.sp_set_session_context @key=N'ActorId',@value=@ActorId;
+  EXEC sys.sp_set_session_context @key=N'CorrelationId',@value=@CorrelationId;
   IF @Entity='ship'
   BEGIN
    IF @Capacity IS NULL OR @Capacity<1 THROW 51294,N'Sức chứa tàu không hợp lệ.',1;
@@ -114,14 +123,16 @@ BEGIN
   END
   ELSE IF @Entity='zone'
   BEGIN
+   IF NOT EXISTS(SELECT 1 FROM dbo.Ships WHERE ShipId=@ParentId) THROW 51299,N'Tàu của khu vực không tồn tại.',1;
    IF @Id=0 INSERT dbo.Zones(ShipId,Name) VALUES(@ParentId,LTRIM(RTRIM(@Name)));
-   ELSE UPDATE dbo.Zones SET Name=LTRIM(RTRIM(@Name)) WHERE ZoneId=@Id;
+   ELSE UPDATE dbo.Zones SET ShipId=@ParentId,Name=LTRIM(RTRIM(@Name)) WHERE ZoneId=@Id;
   END
   ELSE IF @Entity='cabin'
   BEGIN
    IF @Number IS NULL OR LEN(LTRIM(RTRIM(@Number)))=0 OR LEN(@Number)>20 THROW 51295,N'Số cabin không hợp lệ.',1;
+   IF NOT EXISTS(SELECT 1 FROM dbo.Ships WHERE ShipId=@ParentId) THROW 51317,N'Tàu của cabin không tồn tại.',1;
    IF @Id=0 INSERT dbo.Cabins(ShipId,Number) VALUES(@ParentId,LTRIM(RTRIM(@Number)));
-   ELSE UPDATE dbo.Cabins SET Number=LTRIM(RTRIM(@Number)) WHERE CabinId=@Id;
+   ELSE UPDATE dbo.Cabins SET ShipId=@ParentId,Number=LTRIM(RTRIM(@Number)) WHERE CabinId=@Id;
   END
   ELSE IF @Entity='port'
   BEGIN IF @Id=0 INSERT dbo.Ports(Name) VALUES(LTRIM(RTRIM(@Name))); ELSE UPDATE dbo.Ports SET Name=LTRIM(RTRIM(@Name)) WHERE PortId=@Id; END
@@ -139,7 +150,14 @@ BEGIN
   BEGIN
    IF @Kind NOT IN('POS','CHECKIN') THROW 51297,N'Loại thiết bị không hợp lệ.',1;
    IF @Id=0 INSERT dbo.Devices(Name,Kind) VALUES(LTRIM(RTRIM(@Name)),@Kind);
-   ELSE UPDATE dbo.Devices SET Name=LTRIM(RTRIM(@Name)) WHERE DeviceId=@Id;
+   ELSE
+   BEGIN
+    IF EXISTS(SELECT 1 FROM dbo.Transactions WHERE DeviceId=@Id) AND @Kind<>'POS'
+     THROW 51318,N'Thiết bị đã ghi giao dịch POS nên không thể đổi loại.',1;
+    IF EXISTS(SELECT 1 FROM dbo.CheckIns WHERE DeviceId=@Id) AND @Kind<>'CHECKIN'
+     THROW 51319,N'Thiết bị đã ghi check-in nên không thể đổi loại.',1;
+    UPDATE dbo.Devices SET Name=LTRIM(RTRIM(@Name)),Kind=@Kind WHERE DeviceId=@Id;
+   END
   END
   IF @Id<>0 AND @@ROWCOUNT=0 THROW 51298,N'Danh mục không tồn tại.',1;
   DECLARE @SavedId int=CASE WHEN @Id=0 THEN CONVERT(int,SCOPE_IDENTITY()) ELSE @Id END;
@@ -154,7 +172,7 @@ CREATE OR ALTER PROCEDURE dbo.usp_AdminSaveBooking
 AS
 BEGIN
  SET NOCOUNT ON; SET XACT_ABORT ON;
- IF NOT EXISTS(SELECT 1 FROM dbo.UserRoles ur JOIN dbo.Roles r ON r.RoleId=ur.RoleId WHERE ur.UserId=@ActorId AND r.Code='ADMIN')
+ IF NOT EXISTS(SELECT 1 FROM dbo.Users actor JOIN dbo.UserRoles ur ON ur.UserId=actor.UserId JOIN dbo.Roles r ON r.RoleId=ur.RoleId WHERE actor.UserId=@ActorId AND actor.Active=1 AND r.Code='ADMIN')
   THROW 51280,N'Chỉ quản trị viên được gán booking.',1;
  DECLARE @PassengerId int=(SELECT p.PassengerId FROM dbo.Passengers p JOIN dbo.Users u ON u.UserId=p.UserId
   JOIN dbo.UserRoles ur ON ur.UserId=u.UserId JOIN dbo.Roles r ON r.RoleId=ur.RoleId
@@ -165,21 +183,23 @@ BEGIN
  IF NOT EXISTS(SELECT 1 FROM dbo.Packages WHERE PackageId=@PackageId) THROW 51312,N'Gói dịch vụ không tồn tại.',1;
  BEGIN TRY
   BEGIN TRAN;
-  DECLARE @Action varchar(10)='UPDATE';
+  DECLARE @CorrelationId uniqueidentifier=NEWID();
+  EXEC sys.sp_set_session_context @key=N'ActorId',@value=@ActorId;
+  EXEC sys.sp_set_session_context @key=N'CorrelationId',@value=@CorrelationId;
   IF @BookingId=0
   BEGIN
    INSERT dbo.Bookings(CruiseId,PassengerId,CabinId,PackageId) VALUES(@CruiseId,@PassengerId,@CabinId,@PackageId);
    SET @BookingId=SCOPE_IDENTITY();
    INSERT dbo.Accounts(BookingId) VALUES(@BookingId);
-   SET @Action='INSERT';
   END
   ELSE
   BEGIN
    IF NOT EXISTS(SELECT 1 FROM dbo.Bookings WITH(UPDLOCK,HOLDLOCK) WHERE BookingId=@BookingId AND CruiseId=@CruiseId AND PassengerId=@PassengerId)
     THROW 51313,N'Không được đổi hành khách hoặc chuyến của booking hiện có.',1;
+   IF NOT EXISTS(SELECT 1 FROM dbo.Accounts WITH(UPDLOCK,HOLDLOCK) WHERE BookingId=@BookingId AND Status='OPEN')
+    THROW 51320,N'Booking có tài khoản đã chốt nên không thể đổi cabin hoặc gói.',1;
    UPDATE dbo.Bookings SET CabinId=@CabinId,PackageId=@PackageId WHERE BookingId=@BookingId;
   END
-  INSERT dbo.AuditLog(Entity,EntityId,Action,ActorId) VALUES('Booking',@BookingId,@Action,@ActorId);
   COMMIT; SELECT @BookingId AS BookingId;
  END TRY BEGIN CATCH IF @@TRANCOUNT>0 ROLLBACK; THROW; END CATCH
 END;
@@ -190,14 +210,22 @@ CREATE OR ALTER PROCEDURE dbo.usp_AdminPackageService
 AS
 BEGIN
  SET NOCOUNT ON; SET XACT_ABORT ON;
- IF NOT EXISTS(SELECT 1 FROM dbo.UserRoles ur JOIN dbo.Roles r ON r.RoleId=ur.RoleId WHERE ur.UserId=@ActorId AND r.Code='ADMIN')
+ IF NOT EXISTS(SELECT 1 FROM dbo.Users actor JOIN dbo.UserRoles ur ON ur.UserId=actor.UserId JOIN dbo.Roles r ON r.RoleId=ur.RoleId WHERE actor.UserId=@ActorId AND actor.Active=1 AND r.Code='ADMIN')
   THROW 51280,N'Chỉ quản trị viên được cấu hình gói.',1;
  IF NOT EXISTS(SELECT 1 FROM dbo.Packages WHERE PackageId=@PackageId) OR NOT EXISTS(SELECT 1 FROM dbo.Services WHERE ServiceId=@ServiceId)
   THROW 51314,N'Gói hoặc dịch vụ không tồn tại.',1;
- IF @Included=1 AND NOT EXISTS(SELECT 1 FROM dbo.PackageServices WHERE PackageId=@PackageId AND ServiceId=@ServiceId)
-  INSERT dbo.PackageServices(PackageId,ServiceId) VALUES(@PackageId,@ServiceId);
- ELSE IF @Included=0 DELETE dbo.PackageServices WHERE PackageId=@PackageId AND ServiceId=@ServiceId;
- INSERT dbo.AuditLog(Entity,EntityId,Action,ActorId) VALUES('PackageService',@PackageId,CASE WHEN @Included=1 THEN 'INSERT' ELSE 'DELETE' END,@ActorId);
+ BEGIN TRY
+  BEGIN TRAN;
+  DECLARE @Changed bit=0,@CorrelationId uniqueidentifier=NEWID();
+  EXEC sys.sp_set_session_context @key=N'ActorId',@value=@ActorId;
+  EXEC sys.sp_set_session_context @key=N'CorrelationId',@value=@CorrelationId;
+  IF @Included=1 AND NOT EXISTS(SELECT 1 FROM dbo.PackageServices WITH(UPDLOCK,HOLDLOCK) WHERE PackageId=@PackageId AND ServiceId=@ServiceId)
+  BEGIN INSERT dbo.PackageServices(PackageId,ServiceId) VALUES(@PackageId,@ServiceId); SET @Changed=1; END
+  ELSE IF @Included=0
+  BEGIN DELETE dbo.PackageServices WHERE PackageId=@PackageId AND ServiceId=@ServiceId; IF @@ROWCOUNT=1 SET @Changed=1; END
+  IF @Changed=1 INSERT dbo.AuditLog(Entity,EntityId,Action,ActorId) VALUES('PackageService',@PackageId,CASE WHEN @Included=1 THEN 'INSERT' ELSE 'DELETE' END,@ActorId);
+  COMMIT;
+ END TRY BEGIN CATCH IF @@TRANCOUNT>0 ROLLBACK; THROW; END CATCH
 END;
 GO
 
@@ -205,13 +233,21 @@ CREATE OR ALTER PROCEDURE dbo.usp_AdminSavePolicy
  @ActorId int,@CancelHours int,@RefundPercent int
 AS
 BEGIN
- SET NOCOUNT ON;
- IF NOT EXISTS(SELECT 1 FROM dbo.UserRoles ur JOIN dbo.Roles r ON r.RoleId=ur.RoleId WHERE ur.UserId=@ActorId AND r.Code='ADMIN')
+ SET NOCOUNT ON; SET XACT_ABORT ON;
+ IF NOT EXISTS(SELECT 1 FROM dbo.Users actor JOIN dbo.UserRoles ur ON ur.UserId=actor.UserId JOIN dbo.Roles r ON r.RoleId=ur.RoleId WHERE actor.UserId=@ActorId AND actor.Active=1 AND r.Code='ADMIN')
   THROW 51280,N'Chỉ quản trị viên được sửa chính sách.',1;
  IF @CancelHours<0 OR @CancelHours>8760 OR @RefundPercent<0 OR @RefundPercent>100
   THROW 51315,N'Chính sách hủy hoặc hoàn phí không hợp lệ.',1;
- UPDATE dbo.Policy SET CancelHours=@CancelHours,RefundPercent=@RefundPercent WHERE PolicyId=1;
- INSERT dbo.AuditLog(Entity,EntityId,Action,ActorId) VALUES('Policy',1,'UPDATE',@ActorId);
+ BEGIN TRY
+  BEGIN TRAN;
+  DECLARE @CorrelationId uniqueidentifier=NEWID();
+  EXEC sys.sp_set_session_context @key=N'ActorId',@value=@ActorId;
+  EXEC sys.sp_set_session_context @key=N'CorrelationId',@value=@CorrelationId;
+  UPDATE dbo.Policy SET CancelHours=@CancelHours,RefundPercent=@RefundPercent WHERE PolicyId=1;
+  IF @@ROWCOUNT=0 THROW 51321,N'Chính sách hủy chưa được khởi tạo.',1;
+  INSERT dbo.AuditLog(Entity,EntityId,Action,ActorId) VALUES('Policy',1,'UPDATE',@ActorId);
+  COMMIT;
+ END TRY BEGIN CATCH IF @@TRANCOUNT>0 ROLLBACK; THROW; END CATCH
 END;
 GO
 
@@ -219,11 +255,17 @@ CREATE OR ALTER PROCEDURE dbo.usp_AdminSetIdentifierActive
  @ActorId int,@IdentifierId int,@Active bit
 AS
 BEGIN
- SET NOCOUNT ON;
- IF NOT EXISTS(SELECT 1 FROM dbo.UserRoles ur JOIN dbo.Roles r ON r.RoleId=ur.RoleId WHERE ur.UserId=@ActorId AND r.Code='ADMIN')
+ SET NOCOUNT ON; SET XACT_ABORT ON;
+ IF NOT EXISTS(SELECT 1 FROM dbo.Users actor JOIN dbo.UserRoles ur ON ur.UserId=actor.UserId JOIN dbo.Roles r ON r.RoleId=ur.RoleId WHERE actor.UserId=@ActorId AND actor.Active=1 AND r.Code='ADMIN')
   THROW 51280,N'Chỉ quản trị viên được đổi mã định danh.',1;
- UPDATE dbo.Identifiers SET Active=@Active WHERE IdentifierId=@IdentifierId;
- IF @@ROWCOUNT=0 THROW 51316,N'Mã định danh không tồn tại.',1;
- INSERT dbo.AuditLog(Entity,EntityId,Action,ActorId) VALUES('Identifier',@IdentifierId,'UPDATE',@ActorId);
+ BEGIN TRY
+  BEGIN TRAN;
+  DECLARE @CorrelationId uniqueidentifier=NEWID();
+  EXEC sys.sp_set_session_context @key=N'ActorId',@value=@ActorId;
+  EXEC sys.sp_set_session_context @key=N'CorrelationId',@value=@CorrelationId;
+  UPDATE dbo.Identifiers SET Active=@Active WHERE IdentifierId=@IdentifierId;
+  IF @@ROWCOUNT=0 THROW 51316,N'Mã định danh không tồn tại.',1;
+  COMMIT;
+ END TRY BEGIN CATCH IF @@TRANCOUNT>0 ROLLBACK; THROW; END CATCH
 END;
 GO
