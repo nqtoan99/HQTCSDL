@@ -75,7 +75,7 @@ Finance/Admin theo dõi số dư theo booking, đối soát giao dịch POS, voi
 
 Setup chạy 01-schema → 03-seed → 04-auth → 05-itinerary → 06-registration → 07-cancellation → 08-admin → 09-integrity → 10-pos-sync → 11-pos-receipts → 12-passenger-finance → 13-onboard-activities → 14-shore-excursions → 14-checkin → 15-feedback → 16-finance-notifications → 17-recipient-notifications → 18-shore-reminders trên DB mới. Với DB CruiseWeek1 hiện có, setup giữ dữ liệu rồi chạy các migration để cập nhật nghiệp vụ. Seed không gọi usp_Register. Các giờ hoạt động lưu theo giờ địa phương của SQL Server; tác vụ nhắc dùng cùng đồng hồ đó. Nếu dùng SSMS bật SQLCMD Mode. Sau khi chạy SQL bằng tay, chạy setup để cấp hash demo và cập nhật migration.
 
-Chạy `npm run check`, `npm run test:auth`, `npm run test:integrity`, `npm run test:pos` và `npm run test:finance`. Test nghiệp vụ tự tạo database riêng rồi xóa sau khi chạy. Hướng dẫn: `docs/POS-OFFLINE.md`, `docs/PASSENGER-FINANCE.md`; chi tiết API/quyền: `docs/AUTH.md`.
+Chạy `npm run check`, `npm run test:auth`, `npm run test:admin`, `npm run test:integrity`, `npm run test:pos` và `npm run test:finance`. Test nghiệp vụ tự tạo database riêng rồi xóa sau khi chạy. Hướng dẫn: `docs/ADMIN.md`, `docs/POS-OFFLINE.md`, `docs/PASSENGER-FINANCE.md`; chi tiết API/quyền: `docs/AUTH.md`.
 
 ## Code cần push
 
