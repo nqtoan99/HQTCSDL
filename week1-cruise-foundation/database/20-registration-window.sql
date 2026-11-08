@@ -9,7 +9,7 @@ IF COL_LENGTH('dbo.Policy','RegistrationOpenHours') IS NULL
 IF COL_LENGTH('dbo.Policy','RegistrationCloseHours') IS NULL
  ALTER TABLE dbo.Policy ADD RegistrationCloseHours int NOT NULL CONSTRAINT DF_Policy_RegistrationCloseHours DEFAULT 0 WITH VALUES;
 IF NOT EXISTS(SELECT 1 FROM sys.check_constraints WHERE name='CK_Policy_RegistrationWindow')
- ALTER TABLE dbo.Policy ADD CONSTRAINT CK_Policy_RegistrationWindow CHECK(RegistrationOpenHours BETWEEN 0 AND 8760 AND RegistrationCloseHours BETWEEN 0 AND 8760 AND RegistrationOpenHours>=RegistrationCloseHours);
+ ALTER TABLE dbo.Policy ADD CONSTRAINT CK_Policy_RegistrationWindow CHECK(RegistrationOpenHours BETWEEN 0 AND 8760 AND RegistrationCloseHours BETWEEN 0 AND 8760 AND RegistrationOpenHours>RegistrationCloseHours);
 GO
 
 CREATE OR ALTER PROCEDURE dbo.usp_AdminSavePolicy
@@ -22,7 +22,7 @@ BEGIN
   THROW 51280,N'Chỉ quản trị viên được sửa chính sách.',1;
  IF @CancelHours<0 OR @CancelHours>8760 OR @RefundPercent<0 OR @RefundPercent>100 OR
     @RegistrationOpenHours<0 OR @RegistrationOpenHours>8760 OR @RegistrationCloseHours<0 OR @RegistrationCloseHours>8760 OR
-    @RegistrationOpenHours<@RegistrationCloseHours
+    @RegistrationOpenHours<=@RegistrationCloseHours
   THROW 51315,N'Chính sách hủy, hoàn phí hoặc thời gian đăng ký không hợp lệ.',1;
  BEGIN TRY
   BEGIN TRAN;
@@ -34,6 +34,21 @@ BEGIN
   IF @@ROWCOUNT=0 THROW 51321,N'Chính sách chưa được khởi tạo.',1;
   COMMIT;
  END TRY BEGIN CATCH IF @@TRANCOUNT>0 ROLLBACK; THROW; END CATCH
+END;
+GO
+
+CREATE OR ALTER TRIGGER dbo.tr_PolicyAudit ON dbo.Policy AFTER UPDATE AS
+BEGIN
+ SET NOCOUNT ON;
+ INSERT dbo.AuditLog(Entity,EntityId,Action,ActorId,Details,CorrelationId)
+ SELECT 'Policy',i.PolicyId,'UPDATE',TRY_CONVERT(int,SESSION_CONTEXT(N'ActorId')),
+  CONCAT(N'CancelHours=',d.CancelHours,N'→',i.CancelHours,N'; RefundPercent=',d.RefundPercent,N'→',i.RefundPercent,
+   N'; RegistrationOpenHours=',d.RegistrationOpenHours,N'→',i.RegistrationOpenHours,
+   N'; RegistrationCloseHours=',d.RegistrationCloseHours,N'→',i.RegistrationCloseHours),
+  COALESCE(TRY_CONVERT(uniqueidentifier,SESSION_CONTEXT(N'CorrelationId')),NEWID())
+ FROM inserted i JOIN deleted d ON d.PolicyId=i.PolicyId
+ WHERE i.CancelHours<>d.CancelHours OR i.RefundPercent<>d.RefundPercent OR
+  i.RegistrationOpenHours<>d.RegistrationOpenHours OR i.RegistrationCloseHours<>d.RegistrationCloseHours;
 END;
 GO
 

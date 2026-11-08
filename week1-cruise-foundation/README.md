@@ -12,7 +12,7 @@ Migration `database/19-ble-locations.sql` tạo bảng thiết bị đeo, bộ t
 
 ### Thời gian đăng ký hoạt động
 
-Chính sách quản trị viên cho phép đặt thời điểm mở đăng ký (số giờ trước giờ bắt đầu) và thời điểm đóng đăng ký. Mốc này áp dụng chung cho hoạt động trên tàu; đăng ký được kiểm tra lại trong thủ tục SQL. Cấu hình riêng từng hoạt động sẽ được bổ sung ở mốc tiếp theo.
+Chính sách quản trị viên cho phép đặt thời điểm mở đăng ký (số giờ trước giờ bắt đầu) và thời điểm đóng đăng ký. Quản lý hoạt động có thể kế thừa khung giờ chung hoặc đặt khung riêng cho từng hoạt động; thủ tục SQL áp dụng cấu hình riêng nếu có và kiểm tra thời hạn khi ghi đăng ký.
 
 ## Chạy
 

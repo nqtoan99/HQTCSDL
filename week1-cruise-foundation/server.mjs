@@ -307,10 +307,12 @@ const server=http.createServer(async(req,res)=>{
      return send(serviceId===0?201:200,{ok:true});
     }
     if(req.method==='POST'&&url.pathname==='/api/activity/activities'){
-    requireRoles(u,'ACTIVITY');const b=await requestJson(req),activityId=maybeId(b.activityId),cruiseId=id(b.cruiseId),zoneId=id(b.zoneId),name=text(b.name,150).trim(),startsAt=dateTime(b.startsAt),endsAt=dateTime(b.endsAt),capacity=whole(b.capacity,1,100000,'Sức chứa'),fee=amount(b.fee,'Phí tham gia'),status=text(b.status||'OPEN',20).trim().toUpperCase();
+    requireRoles(u,'ACTIVITY');const b=await requestJson(req),activityId=maybeId(b.activityId),cruiseId=id(b.cruiseId),zoneId=id(b.zoneId),name=text(b.name,150).trim(),startsAt=dateTime(b.startsAt),endsAt=dateTime(b.endsAt),capacity=whole(b.capacity,1,100000,'Sức chứa'),fee=amount(b.fee,'Phí tham gia'),status=text(b.status||'OPEN',20).trim().toUpperCase(),registrationOpenHours=b.registrationOpenHours===null?null:whole(b.registrationOpenHours,0,8760,'Số giờ mở đăng ký'),registrationCloseHours=b.registrationCloseHours===null?null:whole(b.registrationCloseHours,0,8760,'Số giờ đóng đăng ký');
     if(endsAt<=startsAt)fail(400,'Thời gian kết thúc phải sau thời gian bắt đầu.');
     if(!['OPEN','DELAYED','COMPLETED'].includes(status))fail(400,'Trạng thái hoạt động không hợp lệ.');
-    await runProcedure(`EXEC dbo.usp_SaveOnboardActivity @ActorId=${u.UserId},@ActivityId=${activityId},@CruiseId=${cruiseId},@ZoneId=${zoneId},@Name=${literal(name)},@StartsAt=${literal(startsAt)},@EndsAt=${literal(endsAt)},@Capacity=${capacity},@Fee=${fee},@Status=${literal(status)};`);
+    if((registrationOpenHours===null)!==(registrationCloseHours===null))fail(400,'Cần nhập đủ giờ mở và đóng, hoặc chọn dùng chính sách chung.');
+    if(registrationOpenHours!==null&&registrationOpenHours<=registrationCloseHours)fail(400,'Giờ mở đăng ký phải lớn hơn giờ đóng.');
+    await runProcedure(`EXEC dbo.usp_SaveOnboardActivity @ActorId=${u.UserId},@ActivityId=${activityId},@CruiseId=${cruiseId},@ZoneId=${zoneId},@Name=${literal(name)},@StartsAt=${literal(startsAt)},@EndsAt=${literal(endsAt)},@Capacity=${capacity},@Fee=${fee},@Status=${literal(status)},@RegistrationOpenHours=${registrationOpenHours??'NULL'},@RegistrationCloseHours=${registrationCloseHours??'NULL'};`);
     return send(activityId===0?201:200,{ok:true});
    }
    const cancelActivityMatch=/^\/api\/activity\/activities\/(\d+)\/cancel$/.exec(url.pathname);
@@ -439,7 +441,7 @@ const server=http.createServer(async(req,res)=>{
     requireRoles(u,'ACTIVITY');const data=await jsonQuery(`SELECT
      JSON_QUERY((SELECT CruiseId,ShipId,Name,StartDate,EndDate,Status FROM dbo.Cruises ORDER BY StartDate,CruiseId FOR JSON PATH)) AS cruises,
      JSON_QUERY((SELECT z.ZoneId,z.ShipId,z.Name AS ZoneName,s.Name AS ShipName FROM dbo.Zones z JOIN dbo.Ships s ON s.ShipId=z.ShipId ORDER BY s.Name,z.Name FOR JSON PATH)) AS zones,
-     JSON_QUERY((SELECT a.ActivityId,a.CruiseId,c.Name AS Cruise,a.ZoneId,z.Name AS Location,a.Name,a.StartsAt,a.EndsAt,a.Capacity,a.Fee,a.Status,
+     JSON_QUERY((SELECT a.ActivityId,a.CruiseId,c.Name AS Cruise,a.ZoneId,z.Name AS Location,a.Name,a.StartsAt,a.EndsAt,a.Capacity,a.Fee,a.Status,a.RegistrationOpenHours,a.RegistrationCloseHours,
       (SELECT COUNT(*) FROM dbo.Registrations r WHERE r.ActivityId=a.ActivityId AND r.Status='CONFIRMED') AS Confirmed,
       (SELECT COUNT(*) FROM dbo.Registrations r WHERE r.ActivityId=a.ActivityId AND r.Status='WAITLIST') AS Waitlist,
       (SELECT COUNT(*) FROM dbo.Registrations r WHERE r.ActivityId=a.ActivityId AND r.Status='CANCELLED') AS Cancelled
