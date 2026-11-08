@@ -8,7 +8,7 @@ Vai trò Quản lý vận hành và Quản trị hệ thống xem dashboard theo
 
 ### BLE mô phỏng
 
-Migration `database/19-ble-locations.sql` tạo bảng thiết bị đeo, bộ thu, lượt quan sát vị trí và view `vw_BLELatest` để lấy vùng gần nhất của từng thiết bị. Setup thêm dữ liệu di chuyển mô phỏng cho tối đa ba booking của chuyến đầu tiên; không cần hoặc dùng đầu thu BLE thật.
+Migration `database/19-ble-locations.sql` tạo bảng thiết bị đeo, bộ thu, lượt quan sát vị trí và view `vw_BLELatest` để lấy vùng gần nhất của từng thiết bị. Dashboard vận hành hiển thị mã thiết bị đeo, booking, bộ thu, vùng gần nhất và thời điểm quan sát. Setup thêm dữ liệu di chuyển mô phỏng cho tối đa ba booking của chuyến đầu tiên; không cần hoặc dùng đầu thu BLE thật.
 
 ## Chạy
 
