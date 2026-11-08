@@ -6,6 +6,10 @@ Mốc hiện tại: đăng nhập/đăng xuất, mật khẩu băm scrypt, phiê
 
 Vai trò Quản lý vận hành và Quản trị hệ thống xem dashboard theo chuyến: doanh thu ròng (đã trừ hoàn tiền), tỷ lệ lấp đầy tàu và hoạt động, tỷ lệ check-in trên số đăng ký được xác nhận, cùng điểm trung bình và số lượt phản hồi. Dashboard cũng tổng hợp chi phí ròng theo cabin, cảnh báo khách tour bờ quá giờ chưa về tàu và cho phép tải báo cáo CSV.
 
+### BLE mô phỏng
+
+Migration `database/19-ble-locations.sql` tạo bảng thiết bị đeo, bộ thu, lượt quan sát vị trí và view `vw_BLELatest` để lấy vùng gần nhất của từng thiết bị. Setup thêm dữ liệu di chuyển mô phỏng cho tối đa ba booking của chuyến đầu tiên; không cần hoặc dùng đầu thu BLE thật.
+
 ## Chạy
 
 Cần Node.js từ 18, SQL Server và sqlcmd trong PATH. Cài dependency QR bằng `npm ci`, rồi mở terminal ở thư mục này:
