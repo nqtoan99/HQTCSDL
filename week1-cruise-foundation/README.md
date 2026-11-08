@@ -4,7 +4,7 @@ Mốc hiện tại: đăng nhập/đăng xuất, mật khẩu băm scrypt, phiê
 
 ## Dashboard vận hành
 
-Vai trò Quản lý vận hành và Quản trị hệ thống xem dashboard theo chuyến: doanh thu ròng (đã trừ hoàn tiền), tỷ lệ lấp đầy tàu và hoạt động, tỷ lệ check-in trên số đăng ký được xác nhận, cùng điểm trung bình và số lượt phản hồi. Dashboard cũng tổng hợp chi phí ròng theo cabin, cảnh báo khách tour bờ quá giờ chưa về tàu và cho phép tải báo cáo CSV.
+Vai trò Quản lý vận hành và Quản trị hệ thống xem dashboard theo chuyến: doanh thu ròng (đã trừ hoàn tiền), tỷ lệ lấp đầy tàu và hoạt động, tỷ lệ check-in trên số đăng ký được xác nhận, cùng điểm trung bình và số lượt phản hồi. Dashboard cũng tổng hợp chi phí ròng theo cabin, cảnh báo khách tour bờ quá giờ chưa về tàu và cho phép tải báo cáo CSV. API `/api/operations/dashboard` trả vùng gần nhất từ dữ liệu BLE mô phỏng; chỉ OPERATIONS và ADMIN truy cập được.
 
 ### BLE mô phỏng
 
