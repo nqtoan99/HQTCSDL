@@ -364,8 +364,8 @@ const server=http.createServer(async(req,res)=>{
     await runProcedure(`EXEC dbo.usp_AdminPackageService @ActorId=${u.UserId},@PackageId=${id(b.packageId)},@ServiceId=${id(b.serviceId)},@Included=${included?1:0};`);return send(200,{ok:true});
    }
    if(req.method==='POST'&&url.pathname==='/api/admin/policy'){
-    requireRoles(u,'ADMIN');const b=await requestJson(req),cancelHours=whole(b.cancelHours,0,8760,'Số giờ hủy'),refundPercent=whole(b.refundPercent,0,100,'Tỷ lệ hoàn phí');
-    await runProcedure(`EXEC dbo.usp_AdminSavePolicy @ActorId=${u.UserId},@CancelHours=${cancelHours},@RefundPercent=${refundPercent};`);return send(200,{ok:true});
+    requireRoles(u,'ADMIN');const b=await requestJson(req),cancelHours=whole(b.cancelHours,0,8760,'Số giờ hủy'),refundPercent=whole(b.refundPercent,0,100,'Tỷ lệ hoàn phí'),registrationOpenHours=whole(b.registrationOpenHours,0,8760,'Số giờ mở đăng ký'),registrationCloseHours=whole(b.registrationCloseHours,0,8760,'Số giờ đóng đăng ký');
+    await runProcedure(`EXEC dbo.usp_AdminSavePolicy @ActorId=${u.UserId},@CancelHours=${cancelHours},@RefundPercent=${refundPercent},@RegistrationOpenHours=${registrationOpenHours},@RegistrationCloseHours=${registrationCloseHours};`);return send(200,{ok:true});
    }
    const identifierMatch=/^\/api\/admin\/identifiers\/(\d+)\/active$/.exec(url.pathname);
    if(req.method==='POST'&&identifierMatch){
@@ -477,7 +477,7 @@ const server=http.createServer(async(req,res)=>{
      JSON_QUERY((SELECT p.PassengerId,u.UserId,u.Name,u.Active FROM Passengers p JOIN Users u ON u.UserId=p.UserId ORDER BY p.PassengerId FOR JSON PATH)) AS passengers,
      JSON_QUERY((SELECT b.BookingId,b.CruiseId,p.UserId,b.CabinId,b.PackageId,u.Name,c.Name AS Cruise,cb.Number AS Cabin,pk.Name AS Package FROM Bookings b JOIN Passengers p ON p.PassengerId=b.PassengerId JOIN Users u ON u.UserId=p.UserId JOIN Cruises c ON c.CruiseId=b.CruiseId JOIN Cabins cb ON cb.CabinId=b.CabinId JOIN Packages pk ON pk.PackageId=b.PackageId ORDER BY b.BookingId FOR JSON PATH)) AS bookings,
      JSON_QUERY((SELECT IdentifierId,BookingId,Code,Kind,Active FROM Identifiers ORDER BY IdentifierId FOR JSON PATH)) AS identifiers,
-     JSON_QUERY((SELECT PolicyId,CancelHours,RefundPercent FROM Policy WHERE PolicyId=1 FOR JSON PATH)) AS policy
+     JSON_QUERY((SELECT PolicyId,CancelHours,RefundPercent,RegistrationOpenHours,RegistrationCloseHours FROM Policy WHERE PolicyId=1 FOR JSON PATH)) AS policy
      FOR JSON PATH,WITHOUT_ARRAY_WRAPPER`));
    }
    if(url.pathname==='/api/admin/users'){requireRoles(u,'ADMIN');return send(200,await jsonQuery('SELECT u.UserId,u.Name,u.Email,u.Active,JSON_QUERY((SELECT r.Code FROM UserRoles ur JOIN Roles r ON r.RoleId=ur.RoleId WHERE ur.UserId=u.UserId FOR JSON PATH)) AS roles FROM Users u FOR JSON PATH'));}

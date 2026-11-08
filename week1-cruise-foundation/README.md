@@ -10,6 +10,10 @@ Vai trò Quản lý vận hành và Quản trị hệ thống xem dashboard theo
 
 Migration `database/19-ble-locations.sql` tạo bảng thiết bị đeo, bộ thu, lượt quan sát vị trí và view `vw_BLELatest` để lấy vùng gần nhất của từng thiết bị. Dashboard vận hành hiển thị mã thiết bị đeo, booking, bộ thu, vùng gần nhất và thời điểm quan sát. Setup thêm dữ liệu di chuyển mô phỏng cho tối đa ba booking của chuyến đầu tiên; không cần hoặc dùng đầu thu BLE thật.
 
+### Thời gian đăng ký hoạt động
+
+Chính sách quản trị viên cho phép đặt thời điểm mở đăng ký (số giờ trước giờ bắt đầu) và thời điểm đóng đăng ký. Mốc này áp dụng chung cho hoạt động trên tàu; đăng ký được kiểm tra lại trong thủ tục SQL. Cấu hình riêng từng hoạt động sẽ được bổ sung ở mốc tiếp theo.
+
 ## Chạy
 
 Cần Node.js từ 18, SQL Server và sqlcmd trong PATH. Cài dependency QR bằng `npm ci`, rồi mở terminal ở thư mục này:
